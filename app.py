@@ -405,6 +405,10 @@ def onboarding_screen(user_data):
     user_town = c_loc1.text_input("Your Town / City (for local search)")
     user_country = c_loc2.text_input("Your Country")
     
+    c_loc3, c_loc4 = st.columns(2)
+    user_state = c_loc3.text_input("State / Province")
+    user_zip = c_loc4.text_input("Zip / Postal Code")
+    
     vehicle = st.selectbox("What do you race?", ["Motorcycle", "Car", "Kart"])
     
     st.subheader("2. Your Championship")
@@ -447,8 +451,11 @@ def onboarding_screen(user_data):
                 "televised": is_tv, "streamed": is_stream,
                 "tv_reach": tv_reach, # Save the new field
                 "tv": tv_reach, # Legacy mapping for templates
-                "location": f"{user_town}, {user_country}",
+                "location": f"{user_town}, {user_state}, {user_country}, {user_zip}".strip(", "),
                 "town": user_town, 
+                "state": user_state,
+                "zip_code": user_zip,
+                "country": user_country, # Ensure country is explicitly saved if strictly needed by other logic, though it's in location
                 "onboarding_complete": True
             })
             
@@ -493,8 +500,12 @@ with st.sidebar:
     
     # Split Location
     saved_town = user_profile.get('town', '')
+    saved_state = user_profile.get('state', '')
     saved_country = user_profile.get('country', '')
-    location_display = f"{saved_town}, {saved_country}".strip(", ")
+    saved_zip = user_profile.get('zip_code', '')
+    
+    location_parts = [saved_town, saved_state, saved_country, saved_zip]
+    location_display = ", ".join([p for p in location_parts if p])
     
     championship = user_profile.get('championship', 'Unknown')
     
@@ -512,6 +523,12 @@ with st.sidebar:
                 p_town = st.text_input("Town", value=saved_town)
             with c2:
                 p_country = st.text_input("Country", value=saved_country)
+                
+            c3, c4 = st.columns(2)
+            with c3:
+                p_state = st.text_input("State", value=saved_state)
+            with c4:
+                p_zip = st.text_input("Zip Code", value=saved_zip)
             
             # [NEW] File Uploaders
             f_audit = st.file_uploader("Social Media Audit (CSV)", type="csv")
@@ -530,6 +547,8 @@ with st.sidebar:
                 
                 user_profile['town'] = p_town
                 user_profile['country'] = p_country
+                user_profile['state'] = p_state
+                user_profile['zip_code'] = p_zip
                 user_profile['goal'] = p_goal
                 
                 db.save_user_profile(user_data['email'], p_name, user_profile)
@@ -548,7 +567,7 @@ with st.sidebar:
     search_radius = st.slider("Radius (Miles)", 10, 500, 50)
     search_mode = st.radio("Mode", ["Sector Search", "Find Previous Sponsors"])
     
-    location_search_ctx = f"{saved_town}, {saved_country}".strip(", ")
+    location_search_ctx = ", ".join([p for p in [saved_town, saved_state, saved_country, saved_zip] if p])
     if not location_search_ctx:
         location_search_ctx = "Silverstone, UK" # Fallback
     
