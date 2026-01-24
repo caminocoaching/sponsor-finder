@@ -5,7 +5,10 @@ import random
 from datetime import datetime, timedelta
 import urllib.parse
 import db_manager as db
+import json
 from search_service import mock_search_places, search_google_places
+from sheets_manager import sheet_manager
+from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Sponsor Finder", page_icon="🏍️", layout="wide")
@@ -432,12 +435,49 @@ def onboarding_screen(user_data):
     
     st.divider()
     
+    st.subheader("4. Connect Your Database (Google Sheets)")
+    st.markdown("We use Google Sheets to save your leads so you can access them from anywhere.")
+    
+    with st.expander("ℹ️ How to get your Google Cloud Key (Click here)", expanded=False):
+         st.markdown("""
+         **Step 1: Get the Key**
+         1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+         2. Create a new Project (e.g. "Sponsor Finder")
+         3. Search for and **Enable** "Google Sheets API" and "Google Drive API"
+         4. Go to **IAM & Admin > Service Accounts**
+         5. Create Service Account -> Keys -> **Add Key (Create New JSON)** -> Download
+         
+         **Step 2: Create the Sheet**
+         1. Create a blank Google Sheet
+         2. **Share** it with the `client_email` found inside your JSON file (give Editor access)
+         """)
+         
+    c_gs1, c_gs2 = st.columns(2)
+    gs_key_file = c_gs1.file_uploader("Upload 'service_account.json'", type="json")
+    gs_url = c_gs2.text_input("Paste Google Sheet URL")
+    
+    st.divider()
+    
     if st.button("Complete Setup", type="primary"):
         missing = []
         if not fname: missing.append("First Name")
         if not champ_name: missing.append("Championship Name")
         if not user_town: missing.append("Town/City")
         if not user_country: missing.append("Country")
+        
+        # Optional GSheet Check - but highly recommended
+        gs_data = None
+        if gs_key_file and gs_url:
+            try:
+                gs_data = json.load(gs_key_file)
+                # Verify Connection before proper save
+                ok, msg = sheet_manager.connect(gs_data, gs_url)
+                if not ok:
+                     st.error(f"Google Sheet Connection Failed: {msg}")
+                     return # Stop
+            except Exception as e:
+                st.error(f"Invalid JSON file: {e}")
+                return
 
         if not missing:
             full_name = f"{fname} {lname}"
@@ -458,6 +498,13 @@ def onboarding_screen(user_data):
                 "country": user_country, # Ensure country is explicitly saved if strictly needed by other logic, though it's in location
                 "onboarding_complete": True
             })
+            
+            # Save Credentials if provided
+            if gs_data and gs_url:
+                 profile_update["google_cloud_key"] = gs_data
+                 profile_update["google_sheet_url"] = gs_url
+                 st.session_state["use_sheets"] = True
+                 st.session_state["sheet_url"] = gs_url
             
             db.save_user_profile(user_data['email'], full_name, profile_update)
             st.success("Profile Saved! Loading Dashboard...")
@@ -484,6 +531,17 @@ if not user_profile.get("onboarding_complete"):
     onboarding_screen(user_data)
     st.stop() # Stop rendering the rest of the app
 
+# AUTO-CONNECT GOOGLE SHEETS
+if "google_cloud_key" in user_profile and "google_sheet_url" in user_profile:
+    if not st.session_state.get("use_sheets"): # Only connect if not already done
+        try:
+            ok, msg = sheet_manager.connect(user_profile["google_cloud_key"], user_profile["google_sheet_url"])
+            if ok:
+                st.session_state["use_sheets"] = True
+                st.session_state["sheet_url"] = user_profile["google_sheet_url"]
+                # Optional: st.toast("Connected to Google Sheets Database")
+        except Exception as e:
+            st.error(f"Failed to auto-connect to Sheets: {e}")
 
 # --- MAIN APP (LOGGED IN & ONBOARDED) ---
 with st.sidebar:
@@ -596,6 +654,43 @@ with st.sidebar:
             st.toast("API Key Saved! It is now locked in.")
             
         st.caption("Enter your key once to unlock Real Search for all future sessions.")
+    
+    with st.expander("📊 Data Source (Google Sheets)"):
+        st.info("Connect a Google Sheet to share leads across devices.")
+        
+        # 1. Service Account Key
+        st.subheader("1. Setup Credentials")
+        key_file = st.file_uploader("Upload 'service_account.json'", type="json", help="Get this from Google Cloud Console")
+        
+        # 2. Sheet Link
+        st.subheader("2. Link Sheet")
+        sheet_url = st.text_input("Google Sheet Share Link", placeholder="https://docs.google.com/spreadsheets/d/...")
+        
+        if st.button("Connect to Sheets"):
+            if key_file and sheet_url:
+                try:
+                    # Load JSON from file
+                    key_data = json.load(key_file)
+                    
+                    # Connect
+                    success, msg = sheet_manager.connect(key_data, sheet_url)
+                    if success:
+                        st.session_state["use_sheets"] = True
+                        st.session_state["sheet_url"] = sheet_url
+                        st.success(f"Connected! Using Google Sheets as Database. {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"Connection Failed: {msg}")
+                except Exception as e:
+                    st.error(f"Error loading key: {e}")
+            else:
+                st.warning("Please upload the JSON key and provide a URL.")
+                
+        if st.session_state.get("use_sheets"):
+            st.success("✅ Currently Using Google Sheets")
+            if st.button("Disconnect (Revert to Local DB)"):
+                st.session_state["use_sheets"] = False
+                st.rerun()
 
 
 # Main Content - TABS
@@ -610,6 +705,7 @@ if 'selected_lead_id' not in st.session_state:
     st.session_state.selected_lead_id = None
 
 # TAB 3: DASHBOARD (Active Campaign) - Moved to end
+# TAB 3: DASHBOARD (Active Campaign)
 with tab_dash:
     st.subheader("Your Active Campaign")
     
@@ -645,69 +741,201 @@ with tab_dash:
         
         st.divider()
         
-        # 3. Priority List (If any due)
-        if num_due > 0:
-            st.warning(f"You have {num_due} leads that need attention today!")
-            st.caption("👇 Prioritize these:")
-            st.dataframe(due_leads[["Business Name", "Status", "Next Action"]], use_container_width=True, hide_index=True)
-            st.divider()
-
-        # 4. Main Table (Sortable)
-        st.subheader("All Leads")
+        # VIEW TOGGLE
+        v_col1, v_col2 = st.columns([1, 4])
+        with v_col1:
+            view_mode = st.radio("View Mode", ["Cards", "Calendar", "List Table"], horizontal=True)
+            
+        # FORMATTING HELPERS
+        def get_status_color(status):
+            if status == "Secured": return "green"
+            if status == "Lost": return "red"
+            if status == "Active": return "orange"
+            return "blue" # Pipeline
         
-        # Filter by Status (Optional)
-        status_filter = st.multiselect("Filter by Status", df_leads['Status'].unique(), default=df_leads['Status'].unique())
-        if status_filter:
-            df_view = df_leads[df_leads['Status'].isin(status_filter)]
+        # --- MODE: CONTACT CARDS ---
+        if view_mode == "Cards":
+            st.caption("👇 Click 'Manage' to open the Outreach Assistant.")
+            
+            # Sort by Next Action
+            df_view = df_leads.sort_values(by="Next Action")
+            
+            # Grid Layout
+            cols = st.columns(3)
+            for idx, row in df_view.iterrows():
+                with cols[idx % 3]:
+                    with st.container(border=True):
+                        # Header
+                        st.markdown(f"**{row['Business Name']}**")
+                        st.caption(f"_{row['Sector']}_")
+                        
+                        # Status Badge
+                        color = get_status_color(row['Status'])
+                        st.markdown(f":{color}[●] **{row['Status']}**")
+                        
+                        # Dates
+                        d_str = row['Next Action'].strftime('%Y-%m-%d') if pd.notnull(row['Next Action']) else "No Date"
+                        st.write(f"📅 Next: **{d_str}**")
+                        
+                        # Actions
+                        if st.button("➡️ Manage", key=f"btn_{row['id']}"):
+                            st.session_state.selected_lead_id = row['id']
+                            st.rerun() # Will reload and show selected in Outreach tab? Or switch tab?
+                            # Switching tabs in Streamlit is tricky without extra component. 
+                            # We will rely on user clicking the tab, but set the state.
+                            st.toast(f"Selected {row['Business Name']}! Switch to 'Outreach Assistant' tab.")
+        
+        # --- MODE: CALENDAR ---
+        elif view_mode == "Calendar":
+            st.caption("📅 Drag and drop isn't supported yet, but here is your schedule.")
+            
+            events = []
+            for _, row in df_leads.iterrows():
+                if pd.notnull(row['Next Action']):
+                    events.append({
+                        "title": f"{row['Business Name']} ({row['Status']})",
+                        "start": row['Next Action'].strftime("%Y-%m-%d"),
+                        "backgroundColor": get_status_color(row['Status']),
+                        "borderColor": get_status_color(row['Status'])
+                    })
+            
+            calendar_options = {
+                "headerToolbar": {
+                    "left": "today prev,next",
+                    "center": "title",
+                    "right": "dayGridMonth,timeGridWeek,timeGridDay"
+                },
+                "initialView": "dayGridMonth",
+            }
+            
+            calendar(events=events, options=calendar_options)
+            
+        # --- MODE: LIST TABLE (Legacy) ---
         else:
-            df_view = df_leads
-            
-        # Format date for display
-        df_view['Next Action'] = df_view['Next Action'].dt.strftime('%Y-%m-%d')
-        
-        # Sort by Next Action so urgent stuff is top
-        df_view = df_view.sort_values(by="Next Action")
-            
-        st.dataframe(df_view[["Business Name", "Sector", "Status", "Contact Name", "Next Action"]], use_container_width=True)
-        
-        # Lead Picker for Outreach
-        lead_choice = st.selectbox("Select Lead to Manage", df_leads["Business Name"].tolist(), key="dash_picker")
-        
-        # Find ID
-        lid = df_leads[df_leads["Business Name"] == lead_choice].iloc[0]["id"]
-        
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            if st.button("➡️ Message / Manage", type="primary"):
-                st.session_state.selected_lead_id = lid
-                st.success(f"Loaded {lead_choice}. Click 'Outreach Assistant' tab.")
-
-        
-        with c2:
-            if st.button("🔄 Set Active"):
-                db.update_lead_status(lid, "Active")
-                st.toast(f"{lead_choice} is now Active!")
-                time.sleep(1)
-                st.rerun()
+            # Filter by Status (Optional)
+            status_filter = st.multiselect("Filter by Status", df_leads['Status'].unique(), default=df_leads['Status'].unique())
+            if status_filter:
+                df_view = df_leads[df_leads['Status'].isin(status_filter)]
+            else:
+                df_view = df_leads
                 
-        with c3:
-            if st.button("✅ Set Secured"):
-                db.update_lead_status(lid, "Secured")
-                st.balloons()
-                st.toast(f"Congrats on securing {lead_choice}!")
-                time.sleep(1)
-                st.rerun()
+            # Format date for display
+            df_view['Next Action'] = df_view['Next Action'].dt.strftime('%Y-%m-%d')
+            
+            # Sort by Next Action so urgent stuff is top
+            df_view = df_view.sort_values(by="Next Action")
                 
-        with c4:
-            if st.button("❌ Not a Fit (Delete)"):
-                db.delete_lead(lid)
-                st.toast(f"Removed {lead_choice}.")
-                time.sleep(1)
-                st.rerun()
+            st.dataframe(df_view[["Business Name", "Sector", "Status", "Contact Name", "Next Action"]], use_container_width=True)
+            
+            # Legacy Actions below table
+            lead_choice = st.selectbox("Select Lead to Manage", df_leads["Business Name"].tolist(), key="dash_picker")
+            lid = df_leads[df_leads["Business Name"] == lead_choice].iloc[0]["id"]
+            
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                if st.button("➡️ Message / Manage", type="primary"):
+                    st.session_state.selected_lead_id = lid
+                    st.success(f"Selected {lead_choice}. Go to Outreach tab.")
+            with c2:
+                if st.button("🔄 Set Active"):
+                    db.update_lead_status(lid, "Active")
+                    st.rerun()
+            with c3:
+                if st.button("✅ Set Secured"):
+                    db.update_lead_status(lid, "Secured")
+                    st.rerun()
+            with c4:
+                if st.button("❌ Delete"):
+                    db.delete_lead(lid)
+                    st.rerun()
 
 
 # TAB 1: SEARCH (DISCOVERY)
 with tab_search:
+    
+    # --- SECTION A: ADD EXISTING LEADS ---
+    with st.expander("➕ Import Existing Leads (Manual or CSV)", expanded=False):
+        tab_man, tab_csv = st.tabs(["Manual Entry", "Bulk CSV Upload"])
+        
+        with tab_man:
+            with st.form("manual_add_form"):
+                c1, c2 = st.columns(2)
+                m_name = c1.text_input("Business Name *")
+                m_contact = c2.text_input("Contact Person")
+                
+                c3, c4 = st.columns(2)
+                m_sector = c3.selectbox("Sector", SECTORS)
+                m_status = c4.selectbox("Status", ["Pipeline", "Active", "Secured", "Lost"])
+                
+                m_notes = st.text_area("Initial Notes / Context")
+                
+                if st.form_submit_button("Add Single Lead"):
+                    if m_name:
+                        # Add via DB
+                        # Note: We need to handle GSheets or SQLite routing. 
+                        # Ideally db_manager abstracts this, but we modified sheets_manager directly for bulk.
+                        # For single add, db_manager.add_lead works fine for both.
+                        
+                        db.add_lead(
+                            st.session_state.user_id, 
+                            m_name, 
+                            m_sector, 
+                            "Manual Entry", 
+                            status=m_status, 
+                            contact_name=m_contact,
+                            notes_json={"initial_note": m_notes}
+                        )
+                        st.success(f"Added {m_name}!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Business Name is required.")
+        
+        with tab_csv:
+            st.info("Upload a CSV with columns: 'Business Name', 'Sector', 'Contact Name', 'Email', 'Website'")
+            up_file = st.file_uploader("Upload CSV", type="csv")
+            
+            if up_file:
+                if st.button("Process Import"):
+                    try:
+                        import_df = pd.read_csv(up_file)
+                        # Normalize cols
+                        # Expect users to have random col names, try to map standard ones
+                        # Simple mapping strategy:
+                        leads_batch = []
+                        for _, row in import_df.iterrows():
+                            # Flexible get
+                            b_name = row.get("Business Name") or row.get("Company") or row.get("Name")
+                            if b_name:
+                                leads_batch.append({
+                                    "Business Name": str(b_name),
+                                    "Sector": str(row.get("Sector", "Imported")),
+                                    "Address": str(row.get("Address", "Unknown")),
+                                    "Website": str(row.get("Website", "")),
+                                    "Contact Name": str(row.get("Contact Name") or row.get("Contact") or ""),
+                                    "Notes": {"source": "csv_import"}
+                                })
+                        
+                        if leads_batch:
+                            # Use Sheets Manager directly if in sheets mode, else loop db
+                            if st.session_state.get("use_sheets"):
+                                ok, msg = sheet_manager.add_leads_bulk(leads_batch)
+                                if ok: st.success(msg)
+                                else: st.error(msg)
+                            else:
+                                count = 0
+                                for l in leads_batch:
+                                    db.add_lead(st.session_state.user_id, l["Business Name"], l["Sector"], l["Address"], website=l["Website"], contact_name=l["Contact Name"])
+                                    count += 1
+                                st.success(f"Imported {count} leads to Local DB.")
+                        else:
+                            st.warning("Could not find a 'Business Name', 'Company', or 'Name' column in your CSV.")
+                            
+                    except Exception as e:
+                        st.error(f"Error reading CSV: {e}")
+
+    st.divider()
+
     st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
     
     if st.button("Run Search", type="primary"):
@@ -999,10 +1227,32 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                         st.caption("👇 Click the Copy icon in the top right of the box below")
                         st.code(final_msg, language=None)
                         
-                        if st.button("Mark as Sent"):
-                            # Logic to update Status -> Contacted
-                            # Logic to set Next Action -> Today + 2 days
-                            st.success("Lead updated! Check Dashboard for follow-up.")
+                        if st.button("Mark as Sent (Auto-Schedule)"):
+                            # 1. Calculate Next Date based on Template
+                            next_days = 2 # Default
+                            
+                            if "Msg 1" in tpl or "Cold" in tpl:
+                                next_days = 2
+                            elif "Msg 2" in tpl:
+                                next_days = 5 # Day 2 -> Day 7
+                            elif "Msg 3" in tpl:
+                                next_days = 7 # Day 7 -> Day 14
+                            elif "Msg 4" in tpl:
+                                next_days = 7 # Day 14 -> Day 21
+                            elif "Msg 5" in tpl:
+                                next_days = 7 # Day 21 -> Day 28
+                            elif "Msg 6" in tpl:
+                                next_days = 30 # End of sequence check
+                            
+                            next_date = (datetime.now() + timedelta(days=next_days)).strftime("%Y-%m-%d")
+                            
+                            # 2. Update DB
+                            db.update_lead_status(lead['id'], "Active", next_date)
+                            
+                            st.balloons()
+                            st.success(f"Message Logged! 📅 Moved lead to {next_date} (in {next_days} days) on the Calendar.")
+                            time.sleep(2)
+                            st.rerun()
                     
                     else:
                         st.subheader("Coach Mode")
@@ -1037,6 +1287,20 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                             
                         st.info("Suggested Reply:")
                         st.code(final_script, language=None)
+                        
+                        st.divider()
+                        st.subheader("📅 Manual Reschedule")
+                        st.caption("If they are busy, on holiday, or ask for a specific date:")
+                        
+                        col_r1, col_r2 = st.columns([2, 1])
+                        manual_date = col_r1.date_input("Select Next Action Date", value=datetime.now() + timedelta(days=7))
+                        
+                        if col_r2.button("Update Schedule"):
+                             m_date_str = manual_date.strftime("%Y-%m-%d")
+                             db.update_lead_status(lead['id'], "Active", m_date_str)
+                             st.success(f"Rescheduled for {m_date_str}!")
+                             time.sleep(1)
+                             st.rerun()
 
             # --- STAGE 2: DISCOVERY CALL ---
             elif stage == "2. Discovery Call":

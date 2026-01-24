@@ -2,6 +2,9 @@ import sqlite3
 import json
 from datetime import datetime
 
+import streamlit as st
+from sheets_manager import sheet_manager
+
 DB_FILE = "sponsor_finder.db"
 
 def init_db():
@@ -9,6 +12,7 @@ def init_db():
     c = conn.cursor()
     
     # Create Users Table
+
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT UNIQUE,
@@ -110,6 +114,29 @@ def save_user_profile(email, name, profile_data):
     return user_id
 
 def add_lead(user_id, business_name, sector, location, website="", status="Pipeline", notes_json="{}", next_action_date=None, contact_name="", last_contact_date="Never"):
+    # GSheets Handling
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        if isinstance(notes_json, str):
+            try:
+                notes_dict = json.loads(notes_json)
+            except:
+                notes_dict = {}
+        else:
+            notes_dict = notes_json
+            
+        data = {
+            "Business Name": business_name,
+            "Sector": sector,
+            "Address": location,
+            "Website": website,
+            "Status": status,
+            "Contact Name": contact_name,
+            "Last Contact": last_contact_date,
+            "Next Action": next_action_date,
+            "Notes": notes_dict
+        }
+        return sheet_manager.add_lead(data)
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
@@ -135,6 +162,9 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     return True
 
 def get_leads(user_id):
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.get_leads()
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
@@ -170,6 +200,9 @@ def get_leads(user_id):
     return leads
 
 def update_lead_status(lead_id, status, next_date=None):
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.update_lead_status(lead_id, status, next_date)
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     if next_date:
@@ -182,6 +215,9 @@ def update_lead_status(lead_id, status, next_date=None):
     conn.close()
 
 def update_lead_notes(lead_id, notes_data):
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.update_lead_notes(lead_id, notes_data)
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     notes_json = json.dumps(notes_data)
@@ -190,6 +226,9 @@ def update_lead_notes(lead_id, notes_data):
     conn.close()
 
 def delete_lead(lead_id):
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.delete_lead(lead_id)
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("DELETE FROM leads WHERE id=?", (lead_id,))
