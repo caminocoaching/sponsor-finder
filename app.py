@@ -365,7 +365,15 @@ def login_screen():
         name_input = st.text_input("Full Name")
         email_input = st.text_input("Email Address")
         
+        # --- ACCESS CODE PROTECTION (DISABLED FOR TESTING) ---
+        # access_code = st.text_input("Access Code (from your Course)", type="password")
+        
         if st.button("Sign In / Sign Up", type="primary"):
+            # Simple hardcoded check - in production could be env var
+            # VALID_CODES = ["SPEED2026", "WINNER", "SPONSOR"]
+            
+            # if access_code not in VALID_CODES:
+            #      st.error("❌ Invalid Access Code. Please check the 'Start Here' module in your course.")
             if email_input and "@" in email_input and name_input:
                 user = db.get_user_by_email(email_input)
                 if user:
@@ -642,18 +650,24 @@ with st.sidebar:
     st.markdown("---")
     with st.expander("⚙️ Settings (Premium Features)"):
         # Load saved key
-        saved_key = st.session_state.user_profile.get("google_api_key", "")
+        # Check st.secrets first (System Managed)
+        system_key = st.secrets.get("google_api_key", "")
         
-        google_api_key = st.text_input("Google Places API Key", value=saved_key, type="password", help="Needed for real map results.")
+        if system_key:
+             st.success("✅ Google API Key is managed by the system (Shared Key active).")
+             google_api_key = system_key
+        else:
+             saved_key = st.session_state.user_profile.get("google_api_key", "")
+             google_api_key = st.text_input("Google Places API Key", value=saved_key, type="password", help="Needed for real map results.")
         
-        if google_api_key != saved_key:
-            # Save to Profile logic
-            st.session_state.user_profile["google_api_key"] = google_api_key
-            # Persist
-            db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
-            st.toast("API Key Saved! It is now locked in.")
+             if google_api_key != saved_key:
+                 # Save to Profile logic
+                 st.session_state.user_profile["google_api_key"] = google_api_key
+                 # Persist
+                 db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
+                 st.toast("API Key Saved! It is now locked in.")
             
-        st.caption("Enter your key once to unlock Real Search for all future sessions.")
+             st.caption("Enter your key once to unlock Real Search for all future sessions.")
     
     with st.expander("📊 Data Source (Google Sheets)"):
         st.info("Connect a Google Sheet to share leads across devices.")
