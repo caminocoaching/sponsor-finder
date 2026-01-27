@@ -119,6 +119,11 @@ class AirtableManager:
         if not self.is_configured():
             return False
 
+        # Validate Last Contact (Airtable DATE field cannot take "Never")
+        lc = lead_data.get("Last Contact", "")
+        if lc in ["Never", ""]:
+            lc = None
+
         # Prepare payload with MAPPED keys
         fields = {
             self.FIELD_MAP["User Email"]: user_email,
@@ -128,7 +133,7 @@ class AirtableManager:
             self.FIELD_MAP["Website"]: lead_data.get("Website", ""),
             self.FIELD_MAP["Status"]: lead_data.get("Status", "Pipeline"),
             self.FIELD_MAP["Contact Name"]: lead_data.get("Contact Name", ""),
-            self.FIELD_MAP["Last Contact"]: lead_data.get("Last Contact", "Never"),
+            self.FIELD_MAP["Last Contact"]: lc,
             self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d"))
             # "Notes JSON": ... SKIPPED
         }
