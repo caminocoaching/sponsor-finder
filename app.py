@@ -1095,7 +1095,7 @@ if current_tab == "✉️ Outreach Assistant":
                     st.subheader("Decision Makers & Research")
                     
                     # PREP: Get Domain for advanced operators
-                    website_url = lead.get('website', '')
+                    website_url = lead.get('Website', '')
                     domain = ""
                     if website_url:
                         # Simple strip to get domain.com
