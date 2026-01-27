@@ -461,19 +461,7 @@ def onboarding_screen(user_data):
         if not user_town: missing.append("Town/City")
         if not user_country: missing.append("Country")
         
-        # Optional GSheet Check - but highly recommended
-        gs_data = None
-        if gs_key_file and gs_url:
-            try:
-                gs_data = json.load(gs_key_file)
-                # Verify Connection before proper save
-                ok, msg = sheet_manager.connect(gs_data, gs_url)
-                if not ok:
-                     st.error(f"Google Sheet Connection Failed: {msg}")
-                     return # Stop
-            except Exception as e:
-                st.error(f"Invalid JSON file: {e}")
-                return
+
 
         if not missing:
             full_name = f"{fname} {lname}"
