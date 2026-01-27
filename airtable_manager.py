@@ -146,9 +146,12 @@ class AirtableManager:
 
         try:
             response = requests.post(self._get_url(), headers=self.headers, json=payload)
-            response.raise_for_status()
+            if response.status_code != 200:
+                st.error(f"Airtable Add API Error ({response.status_code}): {response.text}")
+                response.raise_for_status()
             return True
         except Exception as e:
+            st.error(f"Airtable Add Error: {e}")
             print(f"Airtable Add Error: {e}")
             return False
 

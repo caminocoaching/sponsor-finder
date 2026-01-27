@@ -121,6 +121,7 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     if airtable_manager.is_configured():
         user = get_user_profile(user_id)
         if user and user.get("email"):
+             # st.toast(f"Saving to Airtable as {user['email']}...")
              if isinstance(notes_json, str):
                 try:
                     notes_dict = json.loads(notes_json)
@@ -141,6 +142,8 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
                 "Notes": notes_dict
             }
              return airtable_manager.add_lead(user["email"], data)
+        else:
+             st.error("Airtable Configured but User Email not found in DB.")
 
     # 2. GSheets Handling (Legacy/Optional)
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
