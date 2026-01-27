@@ -11,6 +11,22 @@ class AirtableManager:
         self.headers = None
         self.setup_from_secrets()
 
+        # INTERNAL (App) -> EXTERNAL (Airtable)
+        self.FIELD_MAP = {
+            "User Email": "user email",
+            "Business Name": "business name",
+            "Sector": "sector",
+            "Address": "address",
+            "Website": "website",
+            "Status": "status",
+            "Contact Name": "contact name",
+            "Last Contact": "last contact",
+            "Next Action": "next action",
+            "Notes JSON": "notes json"
+        }
+        # Reverse map for fetching
+        self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
+
     def setup_from_secrets(self):
         """Attempts to load configuration from st.secrets."""
         if "airtable" in st.secrets:
@@ -38,8 +54,10 @@ class AirtableManager:
         if not self.is_configured():
             return []
 
-        # Formula: {User Email} = 'user_email'
-        filter_formula = f"{{User Email}} = '{user_email}'"
+        # Formula: {user email} = 'user_email'
+        # Note: We must use the mapped AIRTABLE column name here
+        at_col = self.FIELD_MAP["User Email"]
+        filter_formula = f"{{{at_col}}} = '{user_email}'"
         params = {
             "filterByFormula": filter_formula
         }
@@ -67,8 +85,13 @@ class AirtableManager:
             for r in all_records:
                 fields = r.get("fields", {})
                 
+                # Helper to get field via Lowercase key
+                def get_f(internal_key, default=""):
+                    external_key = self.FIELD_MAP.get(internal_key, internal_key)
+                    return fields.get(external_key, default)
+
                 # Parse JSON Notes safely
-                notes_str = fields.get("Notes JSON", "{}")
+                notes_str = get_f("Notes JSON", "{}")
                 try:
                     if not notes_str or not notes_str.strip():
                         notes = {}
@@ -79,14 +102,14 @@ class AirtableManager:
 
                 leads.append({
                     "id": r.get("id"), # Use Airtable Record ID
-                    "Business Name": fields.get("Business Name", ""),
-                    "Sector": fields.get("Sector", ""),
-                    "Address": fields.get("Address", ""),
-                    "Website": fields.get("Website", ""),
-                    "Status": fields.get("Status", "Pipeline"),
-                    "Contact Name": fields.get("Contact Name", ""),
-                    "Last Contact": fields.get("Last Contact", "Never"),
-                    "Next Action": fields.get("Next Action", ""),
+                    "Business Name": get_f("Business Name"),
+                    "Sector": get_f("Sector"),
+                    "Address": get_f("Address"),
+                    "Website": get_f("Website"),
+                    "Status": get_f("Status", "Pipeline"),
+                    "Contact Name": get_f("Contact Name"),
+                    "Last Contact": get_f("Last Contact", "Never"),
+                    "Next Action": get_f("Next Action"),
                     "Notes": notes
                 })
             return leads
@@ -103,18 +126,18 @@ class AirtableManager:
         if not self.is_configured():
             return False
 
-        # Prepare payload
+        # Prepare payload with MAPPED keys
         fields = {
-            "User Email": user_email,
-            "Business Name": lead_data.get("Business Name", ""),
-            "Sector": lead_data.get("Sector", ""),
-            "Address": lead_data.get("Address", ""),
-            "Website": lead_data.get("Website", ""),
-            "Status": lead_data.get("Status", "Pipeline"),
-            "Contact Name": lead_data.get("Contact Name", ""),
-            "Last Contact": lead_data.get("Last Contact", "Never"),
-            "Next Action": lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
-            "Notes JSON": json.dumps(lead_data.get("Notes", {}))
+            self.FIELD_MAP["User Email"]: user_email,
+            self.FIELD_MAP["Business Name"]: lead_data.get("Business Name", ""),
+            self.FIELD_MAP["Sector"]: lead_data.get("Sector", ""),
+            self.FIELD_MAP["Address"]: lead_data.get("Address", ""),
+            self.FIELD_MAP["Website"]: lead_data.get("Website", ""),
+            self.FIELD_MAP["Status"]: lead_data.get("Status", "Pipeline"),
+            self.FIELD_MAP["Contact Name"]: lead_data.get("Contact Name", ""),
+            self.FIELD_MAP["Last Contact"]: lead_data.get("Last Contact", "Never"),
+            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
+            self.FIELD_MAP["Notes JSON"]: json.dumps(lead_data.get("Notes", {}))
         }
 
         payload = {
@@ -140,11 +163,11 @@ class AirtableManager:
             return False
 
         fields = {
-            "Status": new_status,
-            "Last Contact": datetime.now().strftime("%Y-%m-%d")
+            self.FIELD_MAP["Status"]: new_status,
+            self.FIELD_MAP["Last Contact"]: datetime.now().strftime("%Y-%m-%d")
         }
         if next_date:
-            fields["Next Action"] = next_date
+            fields[self.FIELD_MAP["Next Action"]] = next_date
 
         payload = {
             "records": [
@@ -171,7 +194,7 @@ class AirtableManager:
             return False
 
         fields = {
-            "Notes JSON": json.dumps(notes_data)
+            self.FIELD_MAP["Notes JSON"]: json.dumps(notes_data)
         }
 
         payload = {
