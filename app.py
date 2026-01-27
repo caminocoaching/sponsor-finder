@@ -1107,10 +1107,15 @@ if current_tab == "✉️ Outreach Assistant":
                     # PILLAR 1: THE WEB DOCTRINE
                     with st.expander("1️⃣ The Web (Deep Dive)", expanded=True):
                         if domain:
-                            # Site Search
-                            q_site = f'site:{domain} "sponsorship" OR "partners"'
+                            # 1. Sponsorship & Partners (Expanded)
+                            q_site = f'site:{domain} "sponsorship" OR "partners" OR "community" OR "giving back" OR "charity"'
                             u_site = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_site)}"
-                            st.markdown(f"• [**Internal Site Search**]({u_site})")
+                            st.markdown(f"• [**🔎 Search: Sponsorships & Community**]({u_site})")
+
+                            # 2. Values & CSR (Corporate Social Responsibility)
+                            q_csr = f'site:{domain} "CSR" OR "ESG" OR "values" OR "mission" OR "corporate responsibility"'
+                            u_csr = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_csr)}"
+                            st.markdown(f"• [**🌱 Search: Company Values & CSR**]({u_csr})")
                             
                             # Filetype PDF
                             q_pdf = f'site:{domain} filetype:pdf'
