@@ -4,6 +4,7 @@ from datetime import datetime
 
 import streamlit as st
 from sheets_manager import sheet_manager
+from airtable_manager import airtable_manager
 
 DB_FILE = "sponsor_finder.db"
 
@@ -114,7 +115,34 @@ def save_user_profile(email, name, profile_data):
     return user_id
 
 def add_lead(user_id, business_name, sector, location, website="", status="Pipeline", notes_json="{}", next_action_date=None, contact_name="", last_contact_date="Never"):
-    # GSheets Handling
+    # Priority: Airtable -> GSheets -> SQLite
+    
+    # 1. Airtable (Centralized)
+    if airtable_manager.is_configured():
+        user = get_user_profile(user_id)
+        if user and user.get("email"):
+             if isinstance(notes_json, str):
+                try:
+                    notes_dict = json.loads(notes_json)
+                except:
+                    notes_dict = {}
+             else:
+                notes_dict = notes_json
+
+             data = {
+                "Business Name": business_name,
+                "Sector": sector,
+                "Address": location,
+                "Website": website,
+                "Status": status,
+                "Contact Name": contact_name,
+                "Last Contact": last_contact_date,
+                "Next Action": next_action_date,
+                "Notes": notes_dict
+            }
+             return airtable_manager.add_lead(user["email"], data)
+
+    # 2. GSheets Handling (Legacy/Optional)
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         if isinstance(notes_json, str):
             try:
@@ -162,6 +190,11 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     return True
 
 def get_leads(user_id):
+    if airtable_manager.is_configured():
+        user = get_user_profile(user_id)
+        if user and user.get("email"):
+             return airtable_manager.get_leads(user["email"])
+
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         return sheet_manager.get_leads()
 
@@ -200,6 +233,9 @@ def get_leads(user_id):
     return leads
 
 def update_lead_status(lead_id, status, next_date=None):
+    if airtable_manager.is_configured():
+        return airtable_manager.update_lead_status(lead_id, status, next_date)
+
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         return sheet_manager.update_lead_status(lead_id, status, next_date)
 
@@ -215,6 +251,9 @@ def update_lead_status(lead_id, status, next_date=None):
     conn.close()
 
 def update_lead_notes(lead_id, notes_data):
+    if airtable_manager.is_configured():
+        return airtable_manager.update_lead_notes(lead_id, notes_data)
+
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         return sheet_manager.update_lead_notes(lead_id, notes_data)
 
@@ -226,6 +265,9 @@ def update_lead_notes(lead_id, notes_data):
     conn.close()
 
 def delete_lead(lead_id):
+    if airtable_manager.is_configured():
+        return airtable_manager.delete_lead(lead_id)
+
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         return sheet_manager.delete_lead(lead_id)
 

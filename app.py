@@ -8,6 +8,7 @@ import db_manager as db
 import json
 from search_service import mock_search_places, search_google_places
 from sheets_manager import sheet_manager
+from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
@@ -443,26 +444,13 @@ def onboarding_screen(user_data):
     
     st.divider()
     
-    st.subheader("4. Connect Your Database (Google Sheets)")
-    st.markdown("We use Google Sheets to save your leads so you can access them from anywhere.")
+    st.subheader("4. Database Setup")
+    if airtable_manager.is_configured():
+         st.success("✅ Central Database Connected")
+    else:
+         st.warning("⚠️ System is running in Local Mode (Sqlite). Ask Admin to configure Airtable.")
     
-    with st.expander("ℹ️ How to get your Google Cloud Key (Click here)", expanded=False):
-         st.markdown("""
-         **Step 1: Get the Key**
-         1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-         2. Create a new Project (e.g. "Sponsor Finder")
-         3. Search for and **Enable** "Google Sheets API" and "Google Drive API"
-         4. Go to **IAM & Admin > Service Accounts**
-         5. Create Service Account -> Keys -> **Add Key (Create New JSON)** -> Download
-         
-         **Step 2: Create the Sheet**
-         1. Create a blank Google Sheet
-         2. **Share** it with the `client_email` found inside your JSON file (give Editor access)
-         """)
-         
-    c_gs1, c_gs2 = st.columns(2)
-    gs_key_file = c_gs1.file_uploader("Upload 'service_account.json'", type="json")
-    gs_url = c_gs2.text_input("Paste Google Sheet URL")
+    st.divider()
     
     st.divider()
     
@@ -497,22 +485,15 @@ def onboarding_screen(user_data):
                 "championship": champ_name, "country": user_country,
                 "competitors": competitors, "audience": spectators, 
                 "televised": is_tv, "streamed": is_stream,
-                "tv_reach": tv_reach, # Save the new field
-                "tv": tv_reach, # Legacy mapping for templates
+                "tv_reach": tv_reach, 
+                "tv": tv_reach, 
                 "location": f"{user_town}, {user_state}, {user_country}, {user_zip}".strip(", "),
                 "town": user_town, 
                 "state": user_state,
                 "zip_code": user_zip,
-                "country": user_country, # Ensure country is explicitly saved if strictly needed by other logic, though it's in location
+                "country": user_country, 
                 "onboarding_complete": True
             })
-            
-            # Save Credentials if provided
-            if gs_data and gs_url:
-                 profile_update["google_cloud_key"] = gs_data
-                 profile_update["google_sheet_url"] = gs_url
-                 st.session_state["use_sheets"] = True
-                 st.session_state["sheet_url"] = gs_url
             
             db.save_user_profile(user_data['email'], full_name, profile_update)
             st.success("Profile Saved! Loading Dashboard...")
@@ -606,10 +587,14 @@ with st.sidebar:
             if st.form_submit_button("Save Updates"):
                 # Handle CSVs logic here (simplified for brevity, assume similar to before)
                 if f_audit:
-                    df = pd.read_csv(f_audit)
-                    tot, _ = extract_audit_stats(df)
-                    user_profile['followers_count'] = tot
-                    user_profile['audience'] = f"{tot} (Social)"
+                    try:
+                        df = pd.read_csv(f_audit)
+                        tot, _ = extract_audit_stats(df)
+                        user_profile['followers_count'] = tot
+                        user_profile['audience'] = f"{tot} (Social)"
+                    except Exception as e:
+                        st.error(f"Error reading Social Audit CSV: {e}")
+                        st.stop()
                 
                 user_profile['town'] = p_town
                 user_profile['country'] = p_country
@@ -669,48 +654,74 @@ with st.sidebar:
             
              st.caption("Enter your key once to unlock Real Search for all future sessions.")
     
-    with st.expander("📊 Data Source (Google Sheets)"):
-        st.info("Connect a Google Sheet to share leads across devices.")
-        
-        # 1. Service Account Key
-        st.subheader("1. Setup Credentials")
-        key_file = st.file_uploader("Upload 'service_account.json'", type="json", help="Get this from Google Cloud Console")
-        
-        # 2. Sheet Link
-        st.subheader("2. Link Sheet")
-        sheet_url = st.text_input("Google Sheet Share Link", placeholder="https://docs.google.com/spreadsheets/d/...")
-        
-        if st.button("Connect to Sheets"):
-            if key_file and sheet_url:
-                try:
-                    # Load JSON from file
-                    key_data = json.load(key_file)
+    if airtable_manager.is_configured():
+        st.success("✅ Connected to Central Database (Airtable)")
+    else:
+        with st.expander("📊 Data Source (Legacy Google Sheets)"):
+            st.info("Connect a Google Sheet to share leads across devices.")
+            
+            # 1. Service Account Key
+            st.subheader("1. Setup Credentials")
+            key_file = st.file_uploader("Upload 'service_account.json'", type="json", help="Get this from Google Cloud Console")
+            
+            # 2. Sheet Link
+            st.subheader("2. Link Sheet")
+            sheet_url = st.text_input("Google Sheet Share Link", placeholder="https://docs.google.com/spreadsheets/d/...")
+            
+            if st.button("Connect to Sheets"):
+                if key_file and sheet_url:
+                    try:
+                        # Load JSON from file
+                        key_data = json.load(key_file)
+                        
+                        # Connect
+                        success, msg = sheet_manager.connect(key_data, sheet_url)
+                        if success:
+                            st.session_state["use_sheets"] = True
+                            st.session_state["sheet_url"] = sheet_url
+                            st.success(f"Connected! Using Google Sheets as Database. {msg}")
+                            st.rerun()
+                        else:
+                            st.error(f"Connection Failed: {msg}")
+                    except Exception as e:
+                        st.error(f"Error loading key: {e}")
+                else:
+                    st.warning("Please upload the JSON key and provide a URL.")
                     
-                    # Connect
-                    success, msg = sheet_manager.connect(key_data, sheet_url)
-                    if success:
-                        st.session_state["use_sheets"] = True
-                        st.session_state["sheet_url"] = sheet_url
-                        st.success(f"Connected! Using Google Sheets as Database. {msg}")
-                        st.rerun()
-                    else:
-                        st.error(f"Connection Failed: {msg}")
-                except Exception as e:
-                    st.error(f"Error loading key: {e}")
-            else:
-                st.warning("Please upload the JSON key and provide a URL.")
-                
-        if st.session_state.get("use_sheets"):
-            st.success("✅ Currently Using Google Sheets")
-            if st.button("Disconnect (Revert to Local DB)"):
-                st.session_state["use_sheets"] = False
-                st.rerun()
+            if st.session_state.get("use_sheets"):
+                st.success("✅ Currently Using Google Sheets")
+                if st.button("Disconnect (Revert to Local DB)"):
+                    st.session_state["use_sheets"] = False
+                    st.rerun()
 
 
 # Main Content - TABS
 # Main Content - TABS
 # Workflow: 1. Search -> 2. Outreach -> 3. Manage
-tab_search, tab_outreach, tab_dash = st.tabs([" Search & Add", "✉️ Outreach Assistant", "📊 Active Campaign"])
+# Main Content - TABS
+# Workflow: 1. Search -> 2. Outreach -> 3. Manage
+
+# [FIX] Use Radio for Navigation so we can switch programmatically
+TABS = [" Search & Add", "✉️ Outreach Assistant", "📊 Active Campaign"]
+if "current_tab" not in st.session_state:
+    st.session_state.current_tab = TABS[0]
+
+# Navigation Bar
+st.session_state.current_tab = st.radio(
+    "", 
+    TABS, 
+    index=TABS.index(st.session_state.current_tab) if st.session_state.current_tab in TABS else 0,
+    horizontal=True, 
+    label_visibility="collapsed",
+    key="nav_radio"
+)
+
+# Helper to sync radio
+if st.session_state.nav_radio != st.session_state.current_tab:
+    st.session_state.current_tab = st.session_state.nav_radio
+    st.rerun()
+
+current_tab = st.session_state.current_tab
 
 # STATE MANAGEMENT
 if 'leads' not in st.session_state:
@@ -720,7 +731,8 @@ if 'selected_lead_id' not in st.session_state:
 
 # TAB 3: DASHBOARD (Active Campaign) - Moved to end
 # TAB 3: DASHBOARD (Active Campaign)
-with tab_dash:
+# TAB 3: DASHBOARD (Active Campaign)
+if current_tab == "📊 Active Campaign":
     st.subheader("Your Active Campaign")
     
     # Load Leads from DB for THIS user
@@ -794,7 +806,10 @@ with tab_dash:
                         # Actions
                         if st.button("➡️ Manage", key=f"btn_{row['id']}"):
                             st.session_state.selected_lead_id = row['id']
-                            st.rerun() # Will reload and show selected in Outreach tab? Or switch tab?
+                            # Switch to Outreach Tab
+                            st.session_state.current_tab = "✉️ Outreach Assistant"
+                            st.session_state.nav_radio = "✉️ Outreach Assistant" # Sync widget key
+                            st.rerun()
                             # Switching tabs in Streamlit is tricky without extra component. 
                             # We will rely on user clicking the tab, but set the state.
                             st.toast(f"Selected {row['Business Name']}! Switch to 'Outreach Assistant' tab.")
@@ -849,7 +864,9 @@ with tab_dash:
             with c1:
                 if st.button("➡️ Message / Manage", type="primary"):
                     st.session_state.selected_lead_id = lid
-                    st.success(f"Selected {lead_choice}. Go to Outreach tab.")
+                    st.session_state.current_tab = "✉️ Outreach Assistant"
+                    st.session_state.nav_radio = "✉️ Outreach Assistant"
+                    st.rerun()
             with c2:
                 if st.button("🔄 Set Active"):
                     db.update_lead_status(lid, "Active")
@@ -865,7 +882,8 @@ with tab_dash:
 
 
 # TAB 1: SEARCH (DISCOVERY)
-with tab_search:
+# TAB 1: SEARCH (DISCOVERY)
+if current_tab == " Search & Add":
     
     # --- SECTION A: ADD EXISTING LEADS ---
     with st.expander("➕ Import Existing Leads (Manual or CSV)", expanded=False):
@@ -890,7 +908,7 @@ with tab_search:
                         # Ideally db_manager abstracts this, but we modified sheets_manager directly for bulk.
                         # For single add, db_manager.add_lead works fine for both.
                         
-                        db.add_lead(
+                        if db.add_lead(
                             st.session_state.user_id, 
                             m_name, 
                             m_sector, 
@@ -898,10 +916,12 @@ with tab_search:
                             status=m_status, 
                             contact_name=m_contact,
                             notes_json={"initial_note": m_notes}
-                        )
-                        st.success(f"Added {m_name}!")
-                        time.sleep(1)
-                        st.rerun()
+                        ):
+                            st.success(f"Added {m_name}!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to add '{m_name}'. It may be a duplicate or a connection error.")
                     else:
                         st.error("Business Name is required.")
         
@@ -1010,7 +1030,8 @@ with tab_search:
 
 # TAB 2: OUTREACH
 # TAB 2: OUTREACH
-with tab_outreach:
+# TAB 2: OUTREACH
+if current_tab == "✉️ Outreach Assistant":
     st.subheader("✉️ Outreach Assistant")
     
     # 1. LOAD ALL LEADS FOR SELECTOR

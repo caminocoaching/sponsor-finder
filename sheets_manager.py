@@ -56,7 +56,12 @@ class SheetManager:
         if not self.worksheet:
             return []
             
-        records = self.worksheet.get_all_records()
+        try:
+            records = self.worksheet.get_all_records()
+        except Exception as e:
+            # st.error(f"Sheet Read Error: {e}") # Optional: propagate error?
+            return []
+
         # Clean up keys if necessary, ensure ID is int
         leads = []
         for r in records:
@@ -92,14 +97,17 @@ class SheetManager:
         if not self.worksheet:
             return False, "Not Connected"
             
-        # 1. Get max ID
-        records = self.worksheet.get_all_records()
-        if records:
-            ids = [int(r['ID']) for r in records if str(r['ID']).isdigit()]
-            current_max_id = max(ids) if ids else 0
-        else:
-            current_max_id = 0
-            self._ensure_headers()
+        try:
+            # 1. Get max ID
+            records = self.worksheet.get_all_records()
+            if records:
+                ids = [int(r['ID']) for r in records if str(r['ID']).isdigit()]
+                current_max_id = max(ids) if ids else 0
+            else:
+                current_max_id = 0
+                self._ensure_headers()
+        except Exception as e:
+            return False, f"Failed to read sheet for ID gen: {e}"
             
         # 2. Prepare Rows
         rows_to_add = []
@@ -121,8 +129,11 @@ class SheetManager:
             
         # 3. Bulk Append
         if rows_to_add:
-            self.worksheet.append_rows(rows_to_add)
-            return True, f"Added {len(rows_to_add)} leads"
+            try:
+                self.worksheet.append_rows(rows_to_add)
+                return True, f"Added {len(rows_to_add)} leads"
+            except Exception as e:
+                return False, f"Failed to append rows: {e}"
         return False, "No data to add"
 
     def add_lead(self, lead_data):
@@ -133,15 +144,18 @@ class SheetManager:
         if not self.worksheet:
             return False
             
-        # Calc new ID
-        records = self.worksheet.get_all_records()
-        if records:
-            # Extract IDs, filter out empty ones
-            ids = [int(r['ID']) for r in records if str(r['ID']).isdigit()]
-            new_id = max(ids) + 1 if ids else 1
-        else:
-            new_id = 1
-            self._ensure_headers() # Ensure headers if empty sheet
+        try:
+            # Calc new ID
+            records = self.worksheet.get_all_records()
+            if records:
+                # Extract IDs, filter out empty ones
+                ids = [int(r['ID']) for r in records if str(r['ID']).isdigit()]
+                new_id = max(ids) + 1 if ids else 1
+            else:
+                new_id = 1
+                self._ensure_headers() # Ensure headers if empty sheet
+        except Exception:
+            return False # Read failed
             
         row = [
             new_id,
@@ -156,13 +170,17 @@ class SheetManager:
             json.dumps(lead_data.get("Notes", {}))
         ]
         
-        self.worksheet.append_row(row)
-        return True
+        try:
+            self.worksheet.append_row(row)
+            return True
+        except Exception:
+            return False
 
     def update_lead_status(self, lead_id, new_status, next_date=None):
         """Find row by ID and update status."""
-        cell = self.worksheet.find(str(lead_id), within_cols=[0,1]) # Search column 1 (ID)
-        if not cell:
+        try:
+            cell = self.worksheet.find(str(lead_id), in_column=1)
+        except gspread.exceptions.CellNotFound:
             return False
             
         row_idx = cell.row
@@ -183,8 +201,9 @@ class SheetManager:
         return True
 
     def update_lead_notes(self, lead_id, notes_data):
-        cell = self.worksheet.find(str(lead_id), within_cols=[0,1])
-        if not cell:
+        try:
+            cell = self.worksheet.find(str(lead_id), in_column=1)
+        except gspread.exceptions.CellNotFound:
             return False
         
         row_idx = cell.row
@@ -193,8 +212,9 @@ class SheetManager:
         return True
 
     def delete_lead(self, lead_id):
-        cell = self.worksheet.find(str(lead_id), within_cols=[0,1])
-        if not cell:
+        try:
+            cell = self.worksheet.find(str(lead_id), in_column=1)
+        except gspread.exceptions.CellNotFound:
             return False
         self.worksheet.delete_rows(cell.row)
         return True
