@@ -694,6 +694,13 @@ TABS = [" Search & Add", "✉️ Outreach Assistant", "📊 Active Campaign"]
 if "current_tab" not in st.session_state:
     st.session_state.current_tab = TABS[0]
 
+# [FIX] Handle deferred tab switching to prevent StreamlitAPIException
+if "requested_tab" in st.session_state:
+    tgt = st.session_state.requested_tab
+    st.session_state.current_tab = tgt
+    st.session_state.nav_radio = tgt # Sync widget key
+    del st.session_state.requested_tab
+
 # Navigation Bar
 st.session_state.current_tab = st.radio(
     "", 
@@ -794,9 +801,8 @@ if current_tab == "📊 Active Campaign":
                         # Actions
                         if st.button("➡️ Manage", key=f"btn_{row['id']}"):
                             st.session_state.selected_lead_id = row['id']
-                            # Switch to Outreach Tab
-                            st.session_state.current_tab = "✉️ Outreach Assistant"
-                            st.session_state.nav_radio = "✉️ Outreach Assistant" # Sync widget key
+                            # Switch to Outreach Tab (Deferred)
+                            st.session_state.requested_tab = "✉️ Outreach Assistant"
                             st.rerun()
                             # Switching tabs in Streamlit is tricky without extra component. 
                             # We will rely on user clicking the tab, but set the state.
@@ -813,7 +819,8 @@ if current_tab == "📊 Active Campaign":
                         "title": f"{row['Business Name']} ({row['Status']})",
                         "start": row['Next Action'].strftime("%Y-%m-%d"),
                         "backgroundColor": get_status_color(row['Status']),
-                        "borderColor": get_status_color(row['Status'])
+                        "borderColor": get_status_color(row['Status']),
+                        "extendedProps": {"id": row['id']}
                     })
             
             calendar_options = {
@@ -825,7 +832,14 @@ if current_tab == "📊 Active Campaign":
                 "initialView": "dayGridMonth",
             }
             
-            calendar(events=events, options=calendar_options)
+            cal_data = calendar(events=events, options=calendar_options)
+            
+            if cal_data.get("eventClick"):
+                 event = cal_data["eventClick"]["event"]
+                 lead_id = event["extendedProps"]["id"]
+                 st.session_state.selected_lead_id = lead_id
+                 st.session_state.requested_tab = "✉️ Outreach Assistant"
+                 st.rerun()
             
         # --- MODE: LIST TABLE (Legacy) ---
         else:
@@ -852,8 +866,7 @@ if current_tab == "📊 Active Campaign":
             with c1:
                 if st.button("➡️ Message / Manage", type="primary"):
                     st.session_state.selected_lead_id = lid
-                    st.session_state.current_tab = "✉️ Outreach Assistant"
-                    st.session_state.nav_radio = "✉️ Outreach Assistant"
+                    st.session_state.requested_tab = "✉️ Outreach Assistant"
                     st.rerun()
             with c2:
                 if st.button("🔄 Set Active"):
