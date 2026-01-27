@@ -21,8 +21,8 @@ class AirtableManager:
             "Status": "status",
             "Contact Name": "contact name",
             "Last Contact": "last contact",
-            "Next Action": "next action",
-            "Notes JSON": "notes json"
+            "Next Action": "next action"
+            # "Notes JSON": "notes json"  <-- Disabled: Column missing in User Base
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
@@ -90,15 +90,8 @@ class AirtableManager:
                     external_key = self.FIELD_MAP.get(internal_key, internal_key)
                     return fields.get(external_key, default)
 
-                # Parse JSON Notes safely
-                notes_str = get_f("Notes JSON", "{}")
-                try:
-                    if not notes_str or not notes_str.strip():
-                        notes = {}
-                    else:
-                        notes = json.loads(notes_str)
-                except:
-                    notes = {}
+                # Notes disabled for now
+                notes = {}
 
                 leads.append({
                     "id": r.get("id"), # Use Airtable Record ID
@@ -136,8 +129,8 @@ class AirtableManager:
             self.FIELD_MAP["Status"]: lead_data.get("Status", "Pipeline"),
             self.FIELD_MAP["Contact Name"]: lead_data.get("Contact Name", ""),
             self.FIELD_MAP["Last Contact"]: lead_data.get("Last Contact", "Never"),
-            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
-            self.FIELD_MAP["Notes JSON"]: json.dumps(lead_data.get("Notes", {}))
+            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d"))
+            # "Notes JSON": ... SKIPPED
         }
 
         payload = {
@@ -190,29 +183,9 @@ class AirtableManager:
         """
         Updates the notes JSON.
         """
-        if not self.is_configured():
-            return False
-
-        fields = {
-            self.FIELD_MAP["Notes JSON"]: json.dumps(notes_data)
-        }
-
-        payload = {
-            "records": [
-                {
-                    "id": lead_id,
-                    "fields": fields
-                }
-            ]
-        }
-
-        try:
-            response = requests.patch(self._get_url(), headers=self.headers, json=payload)
-            response.raise_for_status()
-            return True
-        except Exception as e:
-            print(f"Airtable Notes Error: {e}")
-            return False
+        # Feature disabled because writing to 'Notes JSON' fails if column missing
+        print("Warning: Notes update skipped because 'Notes JSON' column is missing in Airtable.")
+        return True
 
     def delete_lead(self, lead_id):
         """
