@@ -1107,25 +1107,35 @@ if current_tab == "✉️ Outreach Assistant":
                     # PILLAR 1: THE WEB DOCTRINE
                     with st.expander("1️⃣ The Web (Deep Dive)", expanded=True):
                         if domain:
-                            # 1. Sponsorship & Partners (Expanded)
-                            q_site = f'site:{domain} "sponsorship" OR "partners" OR "community" OR "giving back" OR "charity"'
-                            u_site = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_site)}"
-                            st.markdown(f"• [**🔎 Search: Sponsorships & Community**]({u_site})")
+                            # --- OPERATOR BUILDER HELPER ---
+                            def google_link(query, label):
+                                url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                                st.markdown(f"• [{label}]({url})")
 
-                            # 2. Values & CSR (Corporate Social Responsibility)
-                            q_csr = f'site:{domain} "CSR" OR "ESG" OR "values" OR "mission" OR "corporate responsibility"'
-                            u_csr = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_csr)}"
-                            st.markdown(f"• [**🌱 Search: Company Values & CSR**]({u_csr})")
-                            
-                            # Filetype PDF
-                            q_pdf = f'site:{domain} filetype:pdf'
-                            u_pdf = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_pdf)}"
-                            st.markdown(f"• [**Find Internal PDFs (Reports)**]({u_pdf})")
-                            
-                            # Competitors
-                            q_rel = f'related:{domain}'
-                            u_rel = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_rel)}"
-                            st.markdown(f"• [**Find Competitors**]({u_rel})")
+                            st.markdown("##### 🎯 1. Decision Makers")
+                            google_link(f'site:linkedin.com/in "managing director" OR "CEO" OR "owner" OR "founder" "{lead["Business Name"]}"', "LinkedIn: Senior Leadership")
+                            google_link(f'site:twitter.com "{lead["Business Name"]}" AND ("sponsorship" OR "marketing" OR "partnerships")', "Twitter: Marketing Team")
+                            google_link(f'("{lead["Business Name"]}") AND ("managing director" OR "CEO" OR "marketing director") AND ("email" OR "phone" OR "LinkedIn")', "General: Identify Key People")
+
+                            st.markdown("##### 📞 2. Contact Information")
+                            google_link(f'"{lead["Business Name"]}" AND ("phone" OR "mobile" OR "email" OR "contact")', "Find Phones & Emails")
+                            google_link(f'"contact" OR "directory" OR "team" site:{domain}', "Internal Team Directory")
+                            google_link(f'site:linkedin.com/in "first_name last_name" "{lead["Business Name"]}"', "Verify Name on LinkedIn")
+
+                            st.markdown("##### 💰 3. Financials & Size")
+                            google_link(f'site:companieshouse.gov.uk "{lead["Business Name"]}" "directors" OR "officers"', "Companies House (UK) Directors")
+                            google_link(f'"{lead["Business Name"]}" AND ("annual revenue" OR "turnover" OR "sales" OR "net worth")', "Revenue & Net Worth")
+                            google_link(f'site:plimsoll.co.uk OR site:endole.co.uk "{lead["Business Name"]}"', "Financial Health Check")
+
+                            st.markdown("##### 🤝 4. Sponsorship History")
+                            google_link(f'"{lead["Business Name"]}" AND ("sponsored" OR "sponsorship" OR "supporting" OR "partnering")', "Past Sponsorship Activity")
+                            google_link(f'site:{domain} "sponsorship" OR "partners" OR "community" OR "charity"', "Company Policy: Giving Back")
+                            google_link(f'"{lead["Business Name"]}" AND ("marketing budget" OR "advertising spend")', "Marketing Spend Indicators")
+
+                            st.markdown("##### 📰 5. News & Strategy")
+                            google_link(f'site:prnewswire.com OR site:businesswire.com "{lead["Business Name"]}"', "Press Releases")
+                            google_link(f'site:{domain} filetype:pdf OR filetype:ppt "strategy" OR "report"', "Internal Strategy Documents (PDF/PPT)")
+                            google_link(f'related:{domain}', "Competitor Analysis")
                         else:
                             st.warning("No website URL found. Run a Google Search to find their domain first.")
                             q_gen = f'{lead["Business Name"]} official site'
