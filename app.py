@@ -1014,7 +1014,8 @@ if current_tab == " Search & Add":
                 if db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web):
                     st.toast(f"Added {add_choice} to Dashboard!")
                 else:
-                    st.warning("Already in your list.")
+                else:
+                    st.warning("Could not add lead. See error message above.")
 
 # TAB 2: OUTREACH
 # TAB 2: OUTREACH
