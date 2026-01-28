@@ -1281,7 +1281,7 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                         # MANUAL DATE OVERRIDE
                         col_d1, col_d2 = st.columns([2, 1])
                         with col_d1:
-                            # Default logic to pre-fill the date picker nicely
+                            # 1. Calculate Standard Timing (Training Doc)
                             def_days = 2
                             if "Msg 2" in tpl: def_days = 5
                             elif "Msg 3" in tpl: def_days = 7
@@ -1289,16 +1289,25 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                             elif "Msg 5" in tpl: def_days = 7
                             elif "Msg 6" in tpl: def_days = 30
                             
-                            manual_date = st.date_input("Next Follow-up Date", value=datetime.now() + timedelta(days=def_days))
+                            auto_date = datetime.now() + timedelta(days=def_days)
+                            auto_str = auto_date.strftime("%Y-%m-%d")
+                            
+                            # UI: Show Auto, allow Manual
+                            use_manual = st.checkbox("Change Date (Manual)?", value=False)
+                            
+                            if use_manual:
+                                final_date_obj = st.date_input("Select Custom Date", value=auto_date)
+                                final_date = final_date_obj.strftime("%Y-%m-%d")
+                            else:
+                                st.info(f"📅 Auto-Schedule: **{auto_str}** (+{def_days} days)")
+                                final_date = auto_str
                         
                         with col_d2:
                             st.write("") # Spacer
                             st.write("") 
                             if st.button("Mark as Sent & Schedule"):
-                                next_date = manual_date.strftime("%Y-%m-%d")
-                                
-                                # 2. Update DB
-                                db.update_lead_status(lead['id'], "Active", next_date)
+                                # 2. Update DB using decided date
+                                db.update_lead_status(lead['id'], "Active", final_date)
                             
                                 st.balloons()
                                 st.success(f"Message Logged! 📅 Moved lead to {next_date} on the Calendar.")
