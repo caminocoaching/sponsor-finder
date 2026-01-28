@@ -1278,27 +1278,27 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                         st.caption("👇 Click the Copy icon in the top right of the box below")
                         st.code(final_msg, language=None)
                         
-                        if st.button("Mark as Sent (Auto-Schedule)"):
-                            # 1. Calculate Next Date based on Template
-                            next_days = 2 # Default
+                        # MANUAL DATE OVERRIDE
+                        col_d1, col_d2 = st.columns([2, 1])
+                        with col_d1:
+                            # Default logic to pre-fill the date picker nicely
+                            def_days = 2
+                            if "Msg 2" in tpl: def_days = 5
+                            elif "Msg 3" in tpl: def_days = 7
+                            elif "Msg 4" in tpl: def_days = 7
+                            elif "Msg 5" in tpl: def_days = 7
+                            elif "Msg 6" in tpl: def_days = 30
                             
-                            if "Msg 1" in tpl or "Cold" in tpl:
-                                next_days = 2
-                            elif "Msg 2" in tpl:
-                                next_days = 5 # Day 2 -> Day 7
-                            elif "Msg 3" in tpl:
-                                next_days = 7 # Day 7 -> Day 14
-                            elif "Msg 4" in tpl:
-                                next_days = 7 # Day 14 -> Day 21
-                            elif "Msg 5" in tpl:
-                                next_days = 7 # Day 21 -> Day 28
-                            elif "Msg 6" in tpl:
-                                next_days = 30 # End of sequence check
-                            
-                            next_date = (datetime.now() + timedelta(days=next_days)).strftime("%Y-%m-%d")
-                            
-                            # 2. Update DB
-                            db.update_lead_status(lead['id'], "Active", next_date)
+                            manual_date = st.date_input("Next Follow-up Date", value=datetime.now() + timedelta(days=def_days))
+                        
+                        with col_d2:
+                            st.write("") # Spacer
+                            st.write("") 
+                            if st.button("Mark as Sent & Schedule"):
+                                next_date = manual_date.strftime("%Y-%m-%d")
+                                
+                                # 2. Update DB
+                                db.update_lead_status(lead['id'], "Active", next_date)
                             
                             st.balloons()
                             st.success(f"Message Logged! 📅 Moved lead to {next_date} (in {next_days} days) on the Calendar.")
