@@ -1300,10 +1300,10 @@ Format the output as a clean briefing document I can read in 2 minutes."""
                                 # 2. Update DB
                                 db.update_lead_status(lead['id'], "Active", next_date)
                             
-                            st.balloons()
-                            st.success(f"Message Logged! 📅 Moved lead to {next_date} (in {next_days} days) on the Calendar.")
-                            time.sleep(2)
-                            st.rerun()
+                                st.balloons()
+                                st.success(f"Message Logged! 📅 Moved lead to {next_date} on the Calendar.")
+                                time.sleep(2)
+                                st.rerun()
                     
                     else:
                         st.subheader("Coach Mode")
