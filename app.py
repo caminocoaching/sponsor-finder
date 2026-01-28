@@ -52,12 +52,12 @@ SECTOR_HOOKS = {
 }
 
 DISCOVERY_QUESTIONS = [
-    "1. What are your main marketing goals for this year?",
-    "2. Who is your ideal customer profile?",
-    "3. What geographical areas do you need more visibility in?",
-    "4. Have you sponsored sports or events before? How did it go?",
-    "5. What does 'success' look like for a partnership like this?",
-    "6. What is your typical budget range for local brand activation?"
+    "1. Have you been involved in sponsorship before and how did it go for you?",
+    "2. What would be the ideal outcome for you, from us working together this season?",
+    "3. What would you consider to the most important elements of a sponsorship package?",
+    "4. Do you feel that your staff and team could benefit from our partnership this season?",
+    "5. Do you feel your customers could benefit from our partnership this season?",
+    "6. I think it sounds like we have a fit here, would you agree? Is this a good time for me to put together a draft proposal for your feedback?"
 ]
 
 OBJECTION_SCRIPTS = {
@@ -102,6 +102,21 @@ def handle_objection(reply_text):
         return "call me later"
     else:
         return "fallback"
+
+@st.dialog("Are You Sure?")
+def delete_confirmation_dialog(lid, business_name):
+    st.write(f"You are about to delete **{business_name}**.")
+    st.warning("This action cannot be undone.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Yes, Delete Forever", type="primary"):
+            db.delete_lead(lid)
+            st.rerun()
+            
+    with col2:
+        if st.button("Cancel"):
+            st.rerun()
 
 TEMPLATES = {
     "Email: Cold Opener": """Good morning [Contact Name],
@@ -878,8 +893,7 @@ if current_tab == "📊 Active Campaign":
                     st.rerun()
             with c4:
                 if st.button("❌ Delete"):
-                    db.delete_lead(lid)
-                    st.rerun()
+                    delete_confirmation_dialog(lid, lead_choice)
 
 
 # TAB 1: SEARCH (DISCOVERY)
@@ -1213,15 +1227,16 @@ if current_tab == "✉️ Outreach Assistant":
                     with st.expander("🤖 AI Deep Research Prompt (for ChatGPT/Perplexity)", expanded=False):
                         st.caption("Copy this prompt and paste it into ChatGPT, Claude, or Perplexity for a full dossier.")
                         
-                        ai_prompt = f"""Act as a professional sponsorship acquisition agent. I need a deep-dive research briefing on the company "{lead['Business Name']}" (Sector: {lead.get('Sector', 'Unknown')}).
+                        ai_prompt = f"""Act as an elite motorsport-sponsorship acquisition analyst.  
+Produce a 2-minute brief for “{lead['Business Name']}” ({lead.get('Sector', 'Unknown')} sector) with:
+1. Corporate overview & revenue band
+2. Any motorsport / automotive sponsorship history (last 5 yrs)
+3. News & financial milestones (last 12 months)
+4. Three verified decision-makers (Name – Role – LinkedIn URL)
+5. Verified email pattern + main phone number
+6. 3-sentence sponsorship angle tailored to {rider_name} ({championship}).
 
-Please provide a structured report covering:
-1. **Corporate Overview**: What are their primary products/services and current brand positioning?
-2. **Sponsorship History**: Have they sponsored motorsports, athletes, or events before? If yes, list details.
-3. **Recent News & Financials**: Any recent mergers, product launches, or financial milestones in the last 12 months?
-4. **Key People (LinkedIn)**: Identify 3 key decision-makers likely responsible for partnerships (e.g., Marketing Director, Brand Manager, CEO). Format as: Name - Role - LinkedIn URL (if guessable).
-
-Format the output as a clean briefing document I can read in 2 minutes."""
+Supply a source URL for every data point. Do not guess emails."""
                         
                         st.code(ai_prompt, language=None)
 
