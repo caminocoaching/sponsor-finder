@@ -2,6 +2,7 @@ import requests
 import math
 import time
 import random
+import streamlit as st # Added for debug feedback
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
@@ -10,7 +11,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     """
     # Convert decimal degrees to radians 
     lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
-
+    
     # Haversine formula 
     dlon = lon2 - lon1 
     dlat = lat2 - lat1 
@@ -191,14 +192,20 @@ def search_google_places(api_key, query, location, radius_miles):
                 resp_next = requests.post(url, json=next_payload, headers=headers)
                 data_next = resp_next.json()
                 
-                process_places(data_next.get("places", []))
+                places = data_next.get("places", [])
+                st.toast(f"Fetching Page {current_page + 2}... ({len(places)} results)") # Feedback
+                process_places(places)
                 
                 next_token = data_next.get("nextPageToken")
                 current_page += 1
             except Exception as e:
                 print(f"Pagination Error: {e}")
+                st.error(f"Search Page {current_page+2} failed: {e}")
                 break
-            
+        
+        # DEBUG:
+        st.info(f"Search Complete: Processed {current_page+1} pages. Filtered {len(results)} matches.")
+             
         return results
         
     except Exception as e:
