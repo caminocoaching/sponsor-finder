@@ -193,18 +193,22 @@ def search_google_places(api_key, query, location, radius_miles):
                 data_next = resp_next.json()
                 
                 places = data_next.get("places", [])
-                st.toast(f"Fetching Page {current_page + 2}... ({len(places)} results)") # Feedback
+                st.info(f"📄 Fetching Page {current_page + 2}... Found {len(places)} more.") # Persistent Feedback
                 process_places(places)
                 
                 next_token = data_next.get("nextPageToken")
                 current_page += 1
             except Exception as e:
                 print(f"Pagination Error: {e}")
-                st.error(f"Search Page {current_page+2} failed: {e}")
+                st.error(f"❌ Search Page {current_page+2} failed: {e}")
                 break
         
         # DEBUG:
-        st.info(f"Search Complete: Processed {current_page+1} pages. Filtered {len(results)} matches.")
+        total = len(results)
+        if total <= 20:
+            st.warning(f"⚠️ Search finished with {total} results. (API might be limiting pages or no more results).")
+        else:
+            st.success(f"✅ Search Complete: Processed {current_page+1} pages. Total Found: {total}")
              
         return results
         
