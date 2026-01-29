@@ -12,7 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Sponsor Finder", page_icon="🏍️", layout="wide")
+st.set_page_config(page_title="Sponsor Finder V2.0", page_icon="🏍️", layout="wide")
 
 # Initialize DB
 db.init_db()
@@ -395,12 +395,15 @@ def login_screen():
                 if user:
                     # User exists - Log in
                     st.session_state.user_id = user['id']
+                    # [NEW] Set Query Param for persistence
+                    st.query_params["user"] = user['email']
                     st.success(f"Welcome back, {user['name']}!")
                     st.rerun()
                 else:
                     # Create new user with provided Name
                     uid = db.save_user_profile(email_input, name_input, {"email": email_input, "onboarding_complete": False})
                     st.session_state.user_id = uid
+                    st.query_params["user"] = email_input
                     st.success(f"Account created for {name_input}!")
                     st.rerun()
             else:
@@ -505,6 +508,16 @@ def onboarding_screen(user_data):
             st.error(f"Please fill in the following: {', '.join(missing)}")
 
 # LOGIC FLOW
+# [NEW] Auto-Login Check
+if not st.session_state.user_id:
+    # Check query params
+    qp = st.query_params.get("user")
+    if qp:
+         user = db.get_user_by_email(qp)
+         if user:
+             st.session_state.user_id = user['id']
+             st.toast(f"Restored session for {user['name']}")
+    
 if not st.session_state.user_id:
     login_screen()
     st.stop()
@@ -619,11 +632,14 @@ with st.sidebar:
     st.divider()
     st.header("Search Config")
     search_radius = st.slider("Radius (Miles)", 10, 500, 50)
-    search_mode = st.radio("Mode", ["Sector Search", "Find Previous Sponsors"])
+    search_mode = st.radio("Mode", ["Sector Search", "Company Scout"])
     
     location_search_ctx = ", ".join([p for p in [saved_town, saved_state, saved_country, saved_zip] if p])
     if not location_search_ctx:
         location_search_ctx = "Silverstone, UK" # Fallback
+    
+    scout_company = ""
+    scout_location = ""
     
     if search_mode == "Sector Search":
         selected_sector = st.selectbox("Target Sector", SECTORS)
@@ -632,7 +648,11 @@ with st.sidebar:
         else:
             search_query = selected_sector
     else:
-        search_query = "Previous Motorsports Sponsors"
+        # COMPANY SCOUT MODE
+        st.info("🎯 Enter specific details to analyze a target.")
+        scout_company = st.text_input("Company Name")
+        scout_location = st.text_input("City / Location", value=saved_town)
+        search_query = f"{scout_company} in {scout_location}" if scout_company else ""
 
     st.markdown("---")
     st.markdown("---")
@@ -769,13 +789,52 @@ if current_tab == "📊 Active Campaign":
         num_active = len(df_leads[df_leads['Status'] == 'Active'])
         num_secured = len(df_leads[df_leads['Status'] == 'Secured'])
         
-        # 2. Metrics Row
-        m1, m2, m3 = st.columns(3)
-        m1.metric("⚠️ Action Required", f"{num_due} Leads", delta="Due Now" if num_due > 0 else "All Good", delta_color="inverse")
-        m2.metric("🔥 Active Pipeline", f"{num_active} Leads")
-        m3.metric("🏆 Secured Deals", f"{num_secured} Sponsors")
+        # 2. QUICK FILTERS
+        # Initialize filter state
+        if 'dashboard_filter' not in st.session_state:
+            st.session_state.dashboard_filter = "All"
+        
+        f1, f2, f3 = st.columns(3)
+        
+        # Filter 1: Action Required
+        label_1 = f"⚠️ Action Required ({num_due})"
+        if f1.button(label_1, type="primary" if st.session_state.dashboard_filter == "Action" else "secondary", use_container_width=True):
+             st.session_state.dashboard_filter = "Action"
+        
+        # Filter 2: Active Pipeline (Pipeline or Contacted or Meeting)
+        # Assuming 'Sponsor' and 'Lost' are the terminal states.
+        # Actually 'Active' status usually means engaged. Let's use broader logic:
+        # Status NOT IN ['Sponsor', 'Dead', 'Lost']
+        active_mask = ~df_leads['Status'].isin(['Sponsor', 'Dead', 'Lost', 'Rejection'])
+        count_active = len(df_leads[active_mask])
+        label_2 = f"🔥 Active Pipeline ({count_active})"
+        if f2.button(label_2, type="primary" if st.session_state.dashboard_filter == "Pipeline" else "secondary", use_container_width=True):
+             st.session_state.dashboard_filter = "Pipeline"
+             
+        # Filter 3: Secured
+        label_3 = f"🏆 Secured Deals ({num_secured})"
+        if f3.button(label_3, type="primary" if st.session_state.dashboard_filter == "Secured" else "secondary", use_container_width=True):
+             st.session_state.dashboard_filter = "Secured"
+             
+        # Reset
+        if st.session_state.dashboard_filter != "All":
+            if st.button("❌ Reset Filter"):
+                st.session_state.dashboard_filter = "All"
+                st.rerun()
         
         st.divider()
+        
+        # APPLY FILTER
+        df_view = df_leads.copy()
+        if st.session_state.dashboard_filter == "Action":
+             df_view = df_view[due_mask]
+        elif st.session_state.dashboard_filter == "Pipeline":
+             df_view = df_view[active_mask]
+        elif st.session_state.dashboard_filter == "Secured":
+             df_view = df_view[df_leads['Status'] == 'Sponsor'] # Or 'Secured' if that's the literal string
+        
+        # Sort by Next Action
+        df_view = df_view.sort_values(by="Next Action")
         
         # VIEW TOGGLE
         v_col1, v_col2 = st.columns([1, 4])
@@ -784,17 +843,17 @@ if current_tab == "📊 Active Campaign":
             
         # FORMATTING HELPERS
         def get_status_color(status):
-            if status == "Secured": return "green"
-            if status == "Lost": return "red"
-            if status == "Active": return "orange"
+            if status == "Secured" or status == "Sponsor": return "green"
+            if status == "Lost" or status == "Dead" or status == "Rejection": return "red"
+            if status == "Active" or status == "Meeting": return "orange"
             return "blue" # Pipeline
         
         # --- MODE: CONTACT CARDS ---
         if view_mode == "Cards":
             st.caption("👇 Click 'Manage' to open the Outreach Assistant.")
             
-            # Sort by Next Action
-            df_view = df_leads.sort_values(by="Next Action")
+            # Use filtered df
+            # Grid Layout
             
             # Grid Layout
             cols = st.columns(3)
@@ -812,6 +871,19 @@ if current_tab == "📊 Active Campaign":
                         # Dates
                         d_str = row['Next Action'].strftime('%Y-%m-%d') if pd.notnull(row['Next Action']) else "No Date"
                         st.write(f"📅 Next: **{d_str}**")
+                        
+                        # [NEW] Notes Display
+                        notes_data = row.get("Notes", {})
+                        if notes_data:
+                            with st.expander("📝 Notes"):
+                                if isinstance(notes_data, dict):
+                                    st.write(notes_data.get("initial_note", ""))
+                                    # Show other keys?
+                                    for k, v in notes_data.items():
+                                        if k != "initial_note" and not k.startswith("Q"):
+                                             st.caption(f"**{k}:** {v}")
+                                else:
+                                    st.write(str(notes_data))
                         
                         # Actions
                         if st.button("➡️ Manage", key=f"btn_{row['id']}"):
@@ -987,61 +1059,105 @@ if current_tab == " Search & Add":
 
     st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
     
-    if st.button("Run Search", type="primary"):
-        with st.spinner("Scanning Area..."):
-            if google_api_key:
-                # REAL SEARCH
-                results = search_google_places(google_api_key, search_query, location_search_ctx, search_radius)
-                if isinstance(results, dict) and "error" in results:
-                    st.error(f"Google API Error: {results['error']}")
-                    results = [] # Fallback or empty
-                elif not results:
-                    st.warning("No results found via Google. Try a wider radius.")
-            else:
-                # MOCK SEARCH
-                mode_arg = "previous" if search_mode == "Find Previous Sponsors" else "sector"
-                results = mock_search_places(location_search_ctx, search_radius, search_query, mode=mode_arg)
-                st.info("ℹ️ Using Demo Mode (Random Results). Add an API Key in Sidebar settings for real data.")
-                
-        st.session_state.leads = pd.DataFrame(results)
-        st.success(f"Found {len(results)} potential targets!")
-
-    if not st.session_state.leads.empty:
-        # MAP DISPLAY (If lat/lon ok)
-        if "lat" in st.session_state.leads.columns:
-             st.map(st.session_state.leads)
-             
-        # Show Website in table
-        disp_cols = ["Business Name", "Address", "Sector", "Rating"]
-        if "Website" in st.session_state.leads.columns:
-            disp_cols.insert(2, "Website")
-            
-        st.dataframe(
-             st.session_state.leads[disp_cols],
-             use_container_width=True
-        )
-
-        
-        # Add to DB Logic
-        col_s1, col_s2 = st.columns([3, 1])
-        with col_s1:
-            add_choice = st.selectbox("Select result to track", st.session_state.leads["Business Name"].unique())
-        with col_s2:
-            if st.button("➕ Add to My Leads"):
-                # Get full row
-                row = st.session_state.leads[st.session_state.leads["Business Name"] == add_choice].iloc[0]
-                
-                # Extract fields safely
-                b_name = row["Business Name"]
-                b_sect = row["Sector"]
-                b_loc = row["Address"]
-                b_web = row.get("Website", "") # Safe get
-                
-                # Pass explicit args to match db_manager signature
-                if db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web):
-                    st.toast(f"Added {add_choice} to Dashboard!")
+    if st.button("Run Search (Scout)", type="primary"):
+        if search_mode == "Company Scout" and not scout_company:
+             st.error("Please enter a Company Name to scout.")
+        else:
+            with st.spinner("Scanning..."):
+                if google_api_key:
+                    # REAL SEARCH
+                    # For Scout, query covers location, so radius is less critical but still passed
+                    results = search_google_places(google_api_key, search_query, location_search_ctx, search_radius)
+                    if isinstance(results, dict) and "error" in results:
+                        st.error(f"Google API Error: {results['error']}")
+                        results = [] # Fallback or empty
+                    elif not results:
+                        st.warning("No results found via Google. Try a wider radius.")
                 else:
-                    st.warning("Could not add lead. See error message above.")
+                    # MOCK SEARCH
+                    mode_arg = "previous" if search_mode == "Company Scout" else "sector" # reusing mock logic slightly modified
+                    if search_mode == "Company Scout":
+                         # Return just one mock result for the specific company
+                         results = [{
+                            "Business Name": scout_company if scout_company else "Mock Company Ltd", 
+                            "Address": f"123 {scout_location if scout_location else 'London'}, UK",
+                            "Rating": 4.8,
+                            "Sector": "Targeted Scout", 
+                            "Website": "https://www.example.com",
+                            "lat": 52.0, "lon": -1.0
+                         }]
+                    else:
+                        results = mock_search_places(location_search_ctx, search_radius, search_query, mode=mode_arg)
+                    st.info("ℹ️ Using Demo Mode (Mock Results). Add an API Key for real data.")
+                
+            st.session_state.leads = pd.DataFrame(results)
+            st.success(f"Found {len(results)} potential targets!")
+
+        # Post-Processing: Check for Duplicates
+        # 1. Fetch current user leads
+        my_leads = db.get_leads(st.session_state.user_id)
+        existing_names = {l["Business Name"].lower() for l in my_leads}
+        
+        # 2. Add "In List" column
+        df_results = st.session_state.leads.copy()
+        if not df_results.empty:
+            df_results["In List"] = df_results["Business Name"].apply(lambda x: "✅" if str(x).lower() in existing_names else "")
+        
+            # MAP DISPLAY (If lat/lon ok)
+            if "lat" in df_results.columns:
+                 st.map(df_results)
+                 
+            # Show Website in table
+            disp_cols = ["In List", "Business Name", "Address", "Sector", "Rating"]
+            if "Website" in df_results.columns:
+                disp_cols.insert(3, "Website")
+                
+            st.dataframe(
+                 df_results[disp_cols],
+                 use_container_width=True
+            )
+    
+            
+            # Add to DB Logic
+            col_s1, col_s2 = st.columns([3, 1])
+            with col_s1:
+                # Filter out already added ones for the dropdown preference, or just show all
+                add_choice = st.selectbox("Select result to track", df_results["Business Name"].unique())
+            with col_s2:
+                # Check status
+                is_in_list = add_choice.lower() in existing_names
+                
+                if st.button("➕ Add to My Leads", disabled=is_in_list):
+                    if is_in_list:
+                        st.error("Already in your list!")
+                    else:
+                        # Get full row
+                        row = df_results[df_results["Business Name"] == add_choice].iloc[0]
+                        
+                        # Extract fields safely
+                        b_name = row["Business Name"]
+                        b_sect = row["Sector"]
+                        b_loc = row["Address"]
+                        b_web = row.get("Website", "") # Safe get
+                        
+                        # Pass explicit args to match db_manager signature
+                        new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                        if new_lead_id:
+                            st.toast(f"Added {add_choice} to Dashboard!")
+                            
+                            # [NEW] Auto-Switch for SCOUT MODE
+                            if search_mode == "Company Scout":
+                                st.session_state.selected_lead_id = new_lead_id
+                                st.session_state.requested_tab = "✉️ Outreach Assistant"
+                                st.rerun()
+                                
+                            # Force rerun to update duplicate list
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.warning("Could not add lead. See error message above.")
+                if is_in_list:
+                    st.caption("Detailed marked as added.")
 
 # TAB 2: OUTREACH
 # TAB 2: OUTREACH

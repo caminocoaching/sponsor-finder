@@ -139,33 +139,65 @@ def search_google_places(api_key, query, location, radius_miles):
             return {"error": data["error"].get("message", "Unknown API Error")}
             
         results = []
-        for item in data.get("places", []):
-            # Check business status
-            if item.get("businessStatus") in ["CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"]:
-                continue
+        
+        def process_places(places_list):
+            for item in places_list:
+                # Check business status
+                if item.get("businessStatus") in ["CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"]:
+                    continue
 
-            loc = item.get("location", {})
-            r_lat = loc.get("latitude")
-            r_lon = loc.get("longitude")
-            
-            # Distance Filter
-            if lat and lon and r_lat and r_lon:
-                dist = haversine_distance(lat, lon, r_lat, r_lon)
-                if dist > radius_miles:
-                    continue # Skip if outside radius
+                loc = item.get("location", {})
+                r_lat = loc.get("latitude")
+                r_lon = loc.get("longitude")
+                
+                # Distance Filter
+                if lat and lon and r_lat and r_lon:
+                    dist = haversine_distance(lat, lon, r_lat, r_lon)
+                    if dist > radius_miles:
+                        continue # Skip if outside radius
 
-            name = item.get("displayName", {}).get("text", "Unknown Business")
-            website = item.get("websiteUri", "") 
+                name = item.get("displayName", {}).get("text", "Unknown Business")
+                website = item.get("websiteUri", "") 
+                
+                results.append({
+                    "Business Name": name,
+                    "Address": item.get("formattedAddress", "N/A"),
+                    "Rating": item.get("rating", 0.0),
+                    "Sector": query,
+                    "Website": website,
+                    "lat": r_lat,
+                    "lon": r_lon
+                })
+
+        # Process first page
+        process_places(data.get("places", []))
+        
+        # Pagination Logic (Fetch up to ~100 results to balance cost/coverage)
+        MAX_PAGES = 4 
+        next_token = data.get("nextPageToken")
+        
+        current_page = 0
+        while next_token and current_page < MAX_PAGES:
+            time.sleep(2) # Be nice to API / avoid rate limits
             
-            results.append({
-                "Business Name": name,
-                "Address": item.get("formattedAddress", "N/A"),
-                "Rating": item.get("rating", 0.0),
-                "Sector": query,
-                "Website": website,
-                "lat": r_lat,
-                "lon": r_lon
-            })
+            # Prepare next page payload
+            # NOTE: v1 searchText pagination typically just requires the same payload + pageToken
+            # However, some docs suggest strict consistency. We reuse payload.
+            next_payload = payload.copy()
+            next_payload["pageToken"] = next_token
+            # Remove bias/location restrictions if they conflict (usually fine to keep)
+            
+            try:
+                resp_next = requests.post(url, json=next_payload, headers=headers)
+                data_next = resp_next.json()
+                
+                process_places(data_next.get("places", []))
+                
+                next_token = data_next.get("nextPageToken")
+                current_page += 1
+            except Exception as e:
+                print(f"Pagination Error: {e}")
+                break
             
         return results
         

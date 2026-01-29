@@ -8,6 +8,7 @@ class AirtableManager:
         self.api_key = None
         self.base_id = None
         self.table_name = None
+        self.users_table_name = "Users" # Default
         self.headers = None
         self.setup_from_secrets()
 
@@ -21,8 +22,8 @@ class AirtableManager:
             "Status": "status",
             "Contact Name": "contact name",
             "Last Contact": "last contact",
-            "Next Action": "next action"
-            # "Notes JSON": "notes json"  <-- Disabled: Column missing in User Base
+            "Next Action": "next action",
+            "Notes JSON": "notes json"
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
@@ -33,6 +34,7 @@ class AirtableManager:
             self.api_key = st.secrets["airtable"].get("api_key")
             self.base_id = st.secrets["airtable"].get("base_id")
             self.table_name = st.secrets["airtable"].get("table_name", "Leads")
+            self.users_table_name = st.secrets["airtable"].get("users_table_name", "Users")
             
             if self.api_key:
                 self.headers = {
@@ -43,8 +45,78 @@ class AirtableManager:
     def is_configured(self):
         return bool(self.api_key and self.base_id and self.table_name)
 
-    def _get_url(self):
-        return f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
+    def _get_url(self, table_name=None):
+        t_name = table_name if table_name else self.table_name
+        return f"https://api.airtable.com/v0/{self.base_id}/{t_name}"
+
+    # --- USER PROFILE METHODS ---
+    def get_user_by_email(self, email):
+        """
+        Fetch user profile from 'Users' table.
+        """
+        if not self.is_configured(): return None
+        
+        filter_formula = f"{{Email}} = '{email}'"
+        params = {"filterByFormula": filter_formula}
+        
+        try:
+            response = requests.get(self._get_url(self.users_table_name), headers=self.headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            records = data.get("records", [])
+            
+            if records:
+                r = records[0]
+                fields = r.get("fields", {})
+                p_json = fields.get("Profile JSON", "{}")
+                try:
+                    profile = json.loads(p_json)
+                except:
+                    profile = {}
+                    
+                return {
+                    "id": r.get("id"), # Airtable ID
+                    "email": fields.get("Email"),
+                    "name": fields.get("Name"),
+                    "profile": profile
+                }
+        except Exception as e:
+            print(f"Airtable User Fetch Error: {e}")
+            
+        return None
+
+    def save_user_profile(self, email, name, profile_data):
+        """
+        Create or Update user in 'Users' table.
+        """
+        if not self.is_configured(): return False
+        
+        # Check existence
+        existing = self.get_user_by_email(email)
+        
+        profile_str = json.dumps(profile_data)
+        fields = {
+            "Email": email,
+            "Name": name,
+            "Profile JSON": profile_str
+        }
+        
+        try:
+            if existing:
+                # Update
+                payload = {"records": [{"id": existing["id"], "fields": fields}]}
+                url = self._get_url(self.users_table_name)
+                requests.patch(url, headers=self.headers, json=payload).raise_for_status()
+            else:
+                # Create
+                payload = {"records": [{"fields": fields}]}
+                url = self._get_url(self.users_table_name)
+                requests.post(url, headers=self.headers, json=payload).raise_for_status()
+            return True
+        except Exception as e:
+            print(f"Airtable User Save Error: {e}")
+            return False
+
 
     def get_leads(self, user_email):
         """
@@ -90,8 +162,13 @@ class AirtableManager:
                     external_key = self.FIELD_MAP.get(internal_key, internal_key)
                     return fields.get(external_key, default)
 
-                # Notes disabled for now
-                notes = {}
+                # Parse Notes
+                notes_raw = get_f("Notes JSON", "{}")
+                try:
+                    notes = json.loads(notes_raw)
+                except:
+                    notes = {"raw": notes_raw} # Fallback if not JSON
+                if not isinstance(notes, dict): notes = {}
 
                 leads.append({
                     "id": r.get("id"), # Use Airtable Record ID
@@ -123,6 +200,13 @@ class AirtableManager:
         lc = lead_data.get("Last Contact", "")
         if lc in ["Never", ""]:
             lc = None
+            
+        # Serialize Notes
+        notes_input = lead_data.get("Notes", {})
+        if isinstance(notes_input, dict):
+            notes_str = json.dumps(notes_input)
+        else:
+            notes_str = str(notes_input)
 
         # Prepare payload with MAPPED keys
         fields = {
@@ -134,8 +218,8 @@ class AirtableManager:
             self.FIELD_MAP["Status"]: lead_data.get("Status", "Pipeline"),
             self.FIELD_MAP["Contact Name"]: lead_data.get("Contact Name", ""),
             self.FIELD_MAP["Last Contact"]: lc,
-            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d"))
-            # "Notes JSON": ... SKIPPED
+            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
+            self.FIELD_MAP["Notes JSON"]: notes_str
         }
 
         payload = {
@@ -149,7 +233,12 @@ class AirtableManager:
             if response.status_code != 200:
                 st.error(f"Airtable Add API Error ({response.status_code}): {response.text}")
                 response.raise_for_status()
-            return True
+            
+            # Return the New Record ID
+            data = response.json()
+            if "records" in data and len(data["records"]) > 0:
+                return data["records"][0]["id"]
+            return True # Fallback if ID not found but success
         except Exception as e:
             st.error(f"Airtable Add Error: {e}")
             print(f"Airtable Add Error: {e}")
@@ -191,9 +280,23 @@ class AirtableManager:
         """
         Updates the notes JSON.
         """
-        # Feature disabled because writing to 'Notes JSON' fails if column missing
-        print("Warning: Notes update skipped because 'Notes JSON' column is missing in Airtable.")
-        return True
+        if not self.is_configured(): return False
+        
+        notes_str = json.dumps(notes_data)
+        
+        fields = {
+            self.FIELD_MAP["Notes JSON"]: notes_str
+        }
+        
+        payload = {"records": [{"id": lead_id, "fields": fields}]}
+        
+        try:
+            response = requests.patch(self._get_url(), headers=self.headers, json=payload)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"Airtable Notes Update Error: {e}")
+            return False 
 
     def delete_lead(self, lead_id):
         """

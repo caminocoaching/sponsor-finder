@@ -61,39 +61,90 @@ def init_db():
 # ... (user functions unchanged)
 
 def get_user_by_email(email):
+    # 1. Fetch Local SQLite Data (Baseline)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # Explicitly select columns to match expected tuple indices
     c.execute("SELECT id, email, name, profile_json FROM users WHERE email=?", (email,))
-    user = c.fetchone()
+    user_local = c.fetchone()
     conn.close()
-    if user:
+
+    local_profile = {}
+    local_data = None
+    if user_local:
         try:
-            # Handle empty string or None
-            p_json = user[3]
-            profile = json.loads(p_json) if p_json and p_json.strip() else {}
-        except json.JSONDecodeError:
-            profile = {}
+            p_json = user_local[3]
+            local_profile = json.loads(p_json) if p_json and p_json.strip() else {}
+        except:
+            local_profile = {}
+        local_data = {"id": user_local[0], "email": user_local[1], "name": user_local[2], "profile": local_profile}
+
+    # 2. Fetch Airtable Data (Overwrite/Sync)
+    if airtable_manager.is_configured():
+        at_user = airtable_manager.get_user_by_email(email)
+        if at_user:
+            # MERGE STRATEGY: Local < Airtable (Airtable wins)
+            # But if Airtable profile is empty, keep local!
+            merged_profile = local_profile.copy()
+            at_profile = at_user.get("profile", {})
             
-        return {"id": user[0], "email": user[1], "name": user[2], "profile": profile}
-    return None
+            # Only update keys that are present and not empty in Airtable
+            for k, v in at_profile.items():
+                if v: # Is not None/Empty
+                    merged_profile[k] = v
+            
+            # Return combined object
+            # Prefer Airtable ID (string) if we want to write back to it, but app uses ID for local DB specific logic...
+            # Actually, app uses ID for simple checks. Let's return local ID if available to keep SQLite happy, 
+            # but maybe we need both. For now, let's stick to returning what matches the system.
+            # If we return at_user, ID is string. If we return local, ID is int.
+            
+            # If we have local data, use local ID but merged profile
+            if local_data:
+                local_data["profile"] = merged_profile
+                return local_data
+            else:
+                # User exists in Airtable but not Locally? Sync down.
+                # (Ideally we should insert into local here)
+                return at_user
+
+    return local_data
 
 def get_user_profile(user_id):
+    # Retrieve by ID (usually from session state)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT id, email, name, profile_json FROM users WHERE id=?", (user_id,))
     user = c.fetchone()
     conn.close()
+    
     if user:
+        email = user[1]
+        name = user[2]
         try:
             p_json = user[3]
-            profile = json.loads(p_json) if p_json and p_json.strip() else {}
-        except json.JSONDecodeError:
-            profile = {}
-        return {"id": user[0], "email": user[1], "name": user[2], "profile": profile}
+            local_profile = json.loads(p_json) if p_json and p_json.strip() else {}
+        except:
+            local_profile = {}
+            
+        # Check Airtable for updates
+        if airtable_manager.is_configured():
+             at_user = airtable_manager.get_user_by_email(email)
+             if at_user:
+                 at_profile = at_user.get("profile", {})
+                 # Merge: Update local with non-empty Airtable values
+                 for k, v in at_profile.items():
+                     if v: local_profile[k] = v
+        
+        return {"id": user[0], "email": email, "name": name, "profile": local_profile}
+    
     return None
 
 def save_user_profile(email, name, profile_data):
+    # 1. Save to Airtable
+    if airtable_manager.is_configured():
+        airtable_manager.save_user_profile(email, name, profile_data)
+
+    # 2. Save to Local SQLite (Always keep a backup/cache)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
@@ -173,7 +224,8 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     
     # Avoid duplicates based on business name
     c.execute("SELECT id FROM leads WHERE business_name=? AND user_id=?", (business_name, user_id))
-    if c.fetchone():
+    existing = c.fetchone()
+    if existing:
         conn.close()
         return False # Duplicate
     
@@ -188,9 +240,10 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json))
     
+    new_id = c.lastrowid
     conn.commit()
     conn.close()
-    return True
+    return new_id
 
 def get_leads(user_id):
     if airtable_manager.is_configured():
