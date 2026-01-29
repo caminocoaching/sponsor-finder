@@ -642,7 +642,7 @@ with st.sidebar:
     scout_location = ""
     
     if search_mode == "Sector Search":
-        selected_sector = st.selectbox("Target Sector", SECTORS)
+        selected_sector = st.selectbox("Target Sector", SECTORS, index=0, key="target_sector_select")
         if selected_sector == "Other (type your own)":
             search_query = st.text_input("Enter key words")
         else:
