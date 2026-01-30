@@ -581,6 +581,7 @@ if "google_cloud_key" in user_profile and "google_sheet_url" in user_profile:
 
 # --- MAIN APP (LOGGED IN & ONBOARDED) ---
 with st.sidebar:
+    st.caption("v2.5 (Search Upgrade)")
     st.caption(f"Logged in as: {user_data['email']}")
     if st.button("Logout"):
         st.session_state.user_id = None
