@@ -410,56 +410,80 @@ def login_screen():
             else:
                 st.error("Please enter both your Name and a valid Email.")
 
-def onboarding_screen(user_data):
-    st.title("🏁 Welcome! Let's set up your profile.")
-    st.markdown("To help us find the right sponsors, tell us about your racing.")
+def onboarding_screen(user_data, is_edit_mode=False):
+    if is_edit_mode:
+        st.title("👤 Update Your Profile & Data")
+        if st.button("← Back to Dashboard"):
+            st.session_state.editing_profile = False
+            st.rerun()
+    else:
+        st.title("🏁 Welcome! Let's set up your profile.")
+        st.markdown("To help us find the right sponsors, tell us about your racing.")
     
     # Removed st.form to allow interactive conditionals
     st.subheader("1. About You")
     
-    # Pre-fill from Login Name
+    # Pre-fill
+    profile = user_data.get('profile', {})
     raw_name = user_data.get('name', '')
-    pre_fname = ""
-    pre_lname = ""
-    if " " in raw_name:
-        parts = raw_name.split(" ", 1)
-        pre_fname = parts[0]
-        pre_lname = parts[1]
+    if is_edit_mode:
+        default_fname = profile.get('first_name', raw_name.split(" ")[0] if " " in raw_name else raw_name)
+        default_lname = profile.get('last_name', raw_name.split(" ")[1] if " " in raw_name else "")
+        default_town = profile.get('town', '')
+        default_country = profile.get('country', '')
+        default_state = profile.get('state', '')
+        default_zip = profile.get('zip_code', '')
+        default_champ = profile.get('championship', '')
+        default_comp = int(profile.get('competitors', 20))
+        default_spec = profile.get('audience', '5000')
+        default_tv = 1 if profile.get('televised') == "Yes" else 0
+        default_stream = 1 if profile.get('streamed') == "Yes" else 0
+        default_tv_reach = profile.get('tv_reach', '')
     else:
-        pre_fname = raw_name
+        # Defaults for fresh onboarding
+        default_fname = raw_name.split(" ")[0] if " " in raw_name else raw_name
+        default_lname = raw_name.split(" ")[1] if " " in raw_name else ""
+        default_town = ""
+        default_country = ""
+        default_state = ""
+        default_zip = ""
+        default_champ = ""
+        default_comp = 20
+        default_spec = "5000"
+        default_tv = 0
+        default_stream = 0
+        default_tv_reach = ""
         
     c1, c2 = st.columns(2)
-    fname = c1.text_input("First Name", value=pre_fname)
-    lname = c2.text_input("Last Name", value=pre_lname)
+    fname = c1.text_input("First Name", value=default_fname)
+    lname = c2.text_input("Last Name", value=default_lname)
     
     c_loc1, c_loc2 = st.columns(2)
-    user_town = c_loc1.text_input("Your Town / City (for local search)")
-    user_country = c_loc2.text_input("Your Country")
+    user_town = c_loc1.text_input("Your Town / City (for local search)", value=default_town)
+    user_country = c_loc2.text_input("Your Country", value=default_country)
     
     c_loc3, c_loc4 = st.columns(2)
-    user_state = c_loc3.text_input("State / Province")
-    user_zip = c_loc4.text_input("Zip / Postal Code")
+    user_state = c_loc3.text_input("State / Province", value=default_state)
+    user_zip = c_loc4.text_input("Zip / Postal Code", value=default_zip)
     
-    vehicle = st.selectbox("What do you race?", ["Motorcycle", "Car", "Kart"])
+    vehicle = st.selectbox("What do you race?", ["Motorcycle", "Car", "Kart"], index=0)
     
     st.subheader("2. Your Championship")
-    champ_name = st.text_input("Championship Full Name")
+    champ_name = st.text_input("Championship Full Name", value=default_champ)
     
     c3, c4 = st.columns(2)
-    competitors = c3.number_input("Number of Competitors in the paddock", min_value=1, value=20)
-    spectators = c4.text_input("Avg. Spectators per Event", value="5000")
+    competitors = c3.number_input("Number of Competitors in the paddock", min_value=1, value=default_comp)
+    spectators = c4.text_input("Avg. Spectators per Event", value=default_spec)
     
     st.subheader("3. Media Exposure")
     c5, c6 = st.columns(2)
-    # Use radio for immediate visibility vs selectbox (either works without form)
-    is_tv = c5.selectbox("Is it Televised?", ["No", "Yes"])
-    is_stream = c6.selectbox("Is it Streamed?", ["No", "Yes"])
+    is_tv = c5.selectbox("Is it Televised?", ["No", "Yes"], index=default_tv)
+    is_stream = c6.selectbox("Is it Streamed?", ["No", "Yes"], index=default_stream)
     
-    # Conditional Input
     tv_reach = ""
     if is_tv == "Yes" or is_stream == "Yes":
         st.info("Great! TV/Streaming is a huge selling point.")
-        tv_reach = st.text_input("Do you have viewing figures from the organizer? (e.g. 50k per round)", placeholder="Enter number or 'Unknown'")
+        tv_reach = st.text_input("Do you have viewing figures from the organizer? (e.g. 50k per round)", value=default_tv_reach, placeholder="Enter number or 'Unknown'")
     
     st.divider()
     
