@@ -12,6 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
+# Last System Update: Force Reload
 st.set_page_config(page_title="Sponsor Finder V2.5", page_icon="🏍️", layout="wide")
 
 # Initialize DB
@@ -1057,8 +1058,6 @@ if current_tab == " Search & Add":
 
     st.divider()
 
-    st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
-    
     st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
     
     # NEW SEARCH (Reset)
