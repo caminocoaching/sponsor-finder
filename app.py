@@ -537,6 +537,11 @@ if not user_profile.get("onboarding_complete"):
     onboarding_screen(user_data)
     st.stop() # Stop rendering the rest of the app
 
+# [NEW] Check Edit Profile Mode
+if st.session_state.get("editing_profile"):
+    onboarding_screen(user_data, is_edit_mode=True)
+    st.stop()
+
 # AUTO-CONNECT GOOGLE SHEETS
 if "google_cloud_key" in user_profile and "google_sheet_url" in user_profile:
     if not st.session_state.get("use_sheets"): # Only connect if not already done
@@ -578,8 +583,8 @@ with st.sidebar:
     st.write(f"**Racing:** {user_profile.get('vehicle', 'Racer')}")
     st.write(f"**Series:** {championship}")
     
-    if st.button("Access Profile", type="primary"):
-        st.session_state.force_tab = "5. Profile & Data"
+    if st.button("Access Profile", help="Update your profile and upload data sheets."):
+        st.session_state.editing_profile = True
         st.rerun()
 
 
