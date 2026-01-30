@@ -581,30 +581,7 @@ with st.sidebar:
     if st.button("Access Profile", type="primary"):
         st.session_state.force_tab = "5. Profile & Data"
         st.rerun()
-            
-            # Update additional stats
-            p_goal = st.text_input("Season Goal", value=user_profile.get('goal', 'Top 5'))
-            
-            if st.form_submit_button("Save Updates"):
-                # Handle CSVs logic here (simplified for brevity, assume similar to before)
-                if f_audit:
-                    try:
-                        df = pd.read_csv(f_audit)
-                        tot, _ = extract_audit_stats(df)
-                        user_profile['followers_count'] = tot
-                        user_profile['audience'] = f"{tot} (Social)"
-                    except Exception as e:
-                        st.error(f"Error reading Social Audit CSV: {e}")
-                        st.stop()
-                
-                user_profile['town'] = p_town
-                user_profile['country'] = p_country
-                user_profile['state'] = p_state
-                user_profile['zip_code'] = p_zip
-                user_profile['goal'] = p_goal
-                
-                db.save_user_profile(user_data['email'], p_name, user_profile)
-                st.rerun()
+
 
     # Load generator context vars
     season_goal = user_profile.get('goal', '')
