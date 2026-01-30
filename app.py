@@ -1562,7 +1562,99 @@ Supply a source URL for every data point. Do not guess emails."""
 
                 
             elif stage == "3. Proposal":
-                st.info("Generate Proposal")
+                st.subheader("📝 Generate 'Manus.im' Proposal Prompt")
+                st.info("Fill in the specific gaps below. The app will combine this with your Profile & Research to write a full slide-deck prompt.")
+                
+                # 1. GATHER GAPS
+                with st.form("proposal_gaps"):
+                    col_p1, col_p2 = st.columns(2)
+                    
+                    with col_p1:
+                        prop_hook = st.text_area("The 'Hook' (Why them?)", 
+                                               value=f"Given {lead['Business Name']}'s work in {lead.get('Sector', 'their sector')}, our audience matches their target market of...",
+                                               help="Specific reason why this partnership makes sense.", height=100)
+                        
+                        prop_ask = st.text_input("Proposed Investment / Level", value="Title Sponsor (£5,000)", help="Rough ballpark or package name")
+                        
+                    with col_p2:
+                        prop_ideas = st.text_area("3 Activation Ideas (What will we do?)", 
+                                                value="1. Branding on bike fairing.\n2. Social media product showcase video.\n3. VIP tickets for their clients.",
+                                                height=100)
+                        
+                        prop_tone = st.selectbox("Tone", ["Professional & Corporate", "Exciting & High Energy", "Personal & Story-Driven"])
+
+                    if st.form_submit_button("✨ Generate Manus Prompt"):
+                        # 2. CONSTRUCT PROMPT
+                        
+                        # Data Mapping
+                        r_name = st.session_state.user_name
+                        r_series = championship
+                        r_bio = st.session_state.user_profile.get('bio', f"A competitive racer in {r_series}")
+                        r_audience = f"{st.session_state.user_profile.get('social_following', 'Growing')} Followers"
+                        
+                        l_name = lead['Business Name']
+                        l_notes = lead.get('Notes', {})
+                        
+                        # Discovery Context
+                        disc_context = ""
+                        for k,v in l_notes.items():
+                            disc_context += f"- {k}: {v}\n"
+                        
+                        manus_prompt = f"""
+Create a 7-slide sponsorship proposal deck for a meeting between '{r_name}' (Motorsport Athlete) and '{l_name}' (Corporate Partner).
+
+**Context:**
+- **Rider:** {r_name}, racing in {r_series}.
+- **Values:** Precision, Speed, Dedication.
+- **Audience:** {r_audience}, High engagement.
+- **Prospect:** {l_name} (Sector: {lead.get('Sector')}).
+{disc_context}
+
+**Visual Style:** {prop_tone}. Clean, modern, high-impact.
+
+---
+**Structure & Content (Slide by Slide):**
+
+**Slide 1: Title Slide**
+- **Title:** Partnership Proposal: {r_name} x {l_name}
+- **Subtitle:** Accelerating Success Together in {datetime.now().year}
+- **Visual Instruction:** [IMAGE: High-quality headshot of {r_name} smiling in race suit, looking professional. Background: Blurred paddock or track.]
+
+**Slide 2: The Athlete (Who is {r_name}?)**
+- **Content:** {r_bio}
+- **Key Stats:** competing in {r_series}, representing excellence.
+- **Visual Instruction:** [IMAGE: Action shot of {r_name} on the bike/car on track, leaning into a corner to show speed and dynamism.]
+
+**Slide 3: The Audience & Reach**
+- **Headline:** Engaging a Passionate Fanbase
+- **Data:** Reach: {r_audience}. Demographics: Petrolheads, DIYers, High Income.
+- **Visual Instruction:** [IMAGE: Wide shot of the crowd at a race event or a collage of social media fan interactions/comments.]
+
+**Slide 4: Why {l_name}? (The Alignment)**
+- **Headline:** Drivers of Success
+- **Content:** {prop_hook}
+- **Visual Instruction:** [IMAGE: Split screen or composite. Left: {r_name}'s branding. Right: {l_name}'s logo or storefront. Caption: 'Shared Values'.]
+
+**Slide 5: Activation Strategy (What we will do)**
+- **Headline:** More Than Just a Sticker
+- **Bullet Points:**
+{prop_ideas}
+- **Visual Instruction:** [IMAGE: Mockup of the bike/car with {l_name}'s logo placed clearly on the side fairing/door. OR a photo of {r_name} holding a product.]
+
+**Slide 6: The Investment**
+- **Headline:** {prop_ask}
+- **Content:** Deliverables: Branding, Content, Experiences. ROI focused.
+- **Visual Instruction:** [IMAGE: Photo of {r_name} shaking hands with a fan or team member, symbolizing partnership and trust.]
+
+**Slide 7: Next Steps**
+- **Headline:** Let's Start Your Engine
+- **Call to Action:** Meeting to finalize agreement.
+- **Contact:** {st.session_state.user_email}
+- **Visual Instruction:** [IMAGE: 'Thank You' text overlay on a darkened background image of a race car crossing the finish line.]
+"""
+                        st.success("Prompt Generated! Copy below:")
+                        st.code(manus_prompt, language=None)
+                        st.caption("🚀 Go to https://manus.im/app and paste this into the input box.")
 
     else:
         st.info("👈 Go to Dashboard or Search to select a lead.")
