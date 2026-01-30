@@ -797,16 +797,14 @@ if current_tab == "📊 Active Campaign":
         
         f1, f2, f3 = st.columns(3)
         
-        # Filter 1: Action Required
+        # Filter 1: Action Required (Overdue or Due Today)
         label_1 = f"⚠️ Action Required ({num_due})"
         if f1.button(label_1, type="primary" if st.session_state.dashboard_filter == "Action" else "secondary", use_container_width=True):
              st.session_state.dashboard_filter = "Action"
         
-        # Filter 2: Active Pipeline (Pipeline or Contacted or Meeting)
-        # Assuming 'Sponsor' and 'Lost' are the terminal states.
-        # Actually 'Active' status usually means engaged. Let's use broader logic:
-        # Status NOT IN ['Sponsor', 'Dead', 'Lost']
-        active_mask = ~df_leads['Status'].isin(['Sponsor', 'Dead', 'Lost', 'Rejection'])
+        # Filter 2: Active Pipeline (Anything NOT Secured or Lost)
+        # Using the standard statuses: ["Pipeline", "Active", "Secured", "Lost"]
+        active_mask = ~df_leads['Status'].isin(['Secured', 'Lost'])
         count_active = len(df_leads[active_mask])
         label_2 = f"🔥 Active Pipeline ({count_active})"
         if f2.button(label_2, type="primary" if st.session_state.dashboard_filter == "Pipeline" else "secondary", use_container_width=True):
@@ -832,7 +830,7 @@ if current_tab == "📊 Active Campaign":
         elif st.session_state.dashboard_filter == "Pipeline":
              df_view = df_view[active_mask]
         elif st.session_state.dashboard_filter == "Secured":
-             df_view = df_view[df_leads['Status'] == 'Sponsor'] # Or 'Secured' if that's the literal string
+             df_view = df_view[df_leads['Status'] == 'Secured']
         
         # Sort by Next Action
         df_view = df_view.sort_values(by="Next Action")
