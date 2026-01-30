@@ -1584,7 +1584,7 @@ Supply a source URL for every data point. Do not guess emails."""
                         prop_tone = st.selectbox("Tone", ["Professional & Corporate", "Exciting & High Energy", "Personal & Story-Driven"])
 
                     if st.form_submit_button("✨ Generate Manus Prompt"):
-                        # 2. CONSTRUCT PROMPT
+                        # 2. CONSTRUCT PROMPT ("Winning Formula" - JK66 Style)
                         
                         # Data Mapping
                         r_name = st.session_state.user_name
@@ -1595,66 +1595,89 @@ Supply a source URL for every data point. Do not guess emails."""
                         l_name = lead['Business Name']
                         l_notes = lead.get('Notes', {})
                         
-                        # Discovery Context
-                        disc_context = ""
-                        for k,v in l_notes.items():
-                            disc_context += f"- {k}: {v}\n"
+                        # Discovery Context (Formatted)
+                        disc_context = "**Deep Discovery Findings (Client Voice):**\n"
+                        has_answers = False
+                        
+                        # Map Q1..Q6 to text
+                        for i, question_text in enumerate(DISCOVERY_QUESTIONS):
+                            key = f"Q{i+1}"
+                            answer = l_notes.get(key, "").strip()
+                            if answer:
+                                has_answers = True
+                                disc_context += f"- **Issue/Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
+                        
+                        if not has_answers:
+                            disc_context += "(⚠️ NO DISCOVERY DATA LOGGED. This proposal will be generic. Go back to 'Discovery Call' to log answers.)"
+                            st.warning("⚠️ You haven't logged any Discovery Call answers. The proposal might lack specific client details.")
                         
                         manus_prompt = f"""
-Create a 7-slide sponsorship proposal deck for a meeting between '{r_name}' (Motorsport Athlete) and '{l_name}' (Corporate Partner).
+Create a high-impact 10-slide sponsorship deck for '{r_name}' (Motorsport Athlete) pitching to '{l_name}'.
+**Style Ref:** MODELED ON JOEL KELSO 'JK66' PRESENTATION. Professional, Data-Heavy, ROI-Focused.
 
 **Context:**
-- **Rider:** {r_name}, racing in {r_series}.
-- **Values:** Precision, Speed, Dedication.
-- **Audience:** {r_audience}, High engagement.
-- **Prospect:** {l_name} (Sector: {lead.get('Sector')}).
-{disc_context}
-
-**Visual Style:** {prop_tone}. Clean, modern, high-impact.
+- **Rider:** {r_name} ({r_series}). Values: Speed, Precision, Trust.
+- **Audience:** {r_audience}, High disposable income, petrolheads.
+- **Prospect:** {l_name} (Sector: {lead.get('Sector')}). Context: {disc_context}
+- **Tone:** {prop_tone}.
 
 ---
-**Structure & Content (Slide by Slide):**
+**Structure (Slide by Slide):**
 
-**Slide 1: Title Slide**
-- **Title:** Partnership Proposal: {r_name} x {l_name}
-- **Subtitle:** Accelerating Success Together in {datetime.now().year}
-- **Visual Instruction:** [IMAGE: High-quality headshot of {r_name} smiling in race suit, looking professional. Background: Blurred paddock or track.]
+**Slide 1: Title**
+- **Text:** {r_name} x {l_name} | Partnership Proposal {datetime.now().year}
+- **Visual:** [IMAGE: Cinematic headshot of {r_name} in full race gear, helmet off, looking impactful.]
 
 **Slide 2: The Athlete (Who is {r_name}?)**
 - **Content:** {r_bio}
-- **Key Stats:** competing in {r_series}, representing excellence.
-- **Visual Instruction:** [IMAGE: Action shot of {r_name} on the bike/car on track, leaning into a corner to show speed and dynamism.]
+- **Highlights:** List key recent race results (Podiums, Wins) as bullet points.
+- **Visual:** [IMAGE: Action shot on track, knee down, blurring background for speed.]
 
-**Slide 3: The Audience & Reach**
+**Slide 3: Brand Ambassador Credibility**
+- **Headline:** Trusted by Global Brands
+- **Content:** "Representing excellence. Professional, approachable, and media-savvy."
+- **Visual:** [IMAGE: {r_name} giving a TV interview or shaking hands with a VIP/Team Manager. Logos of current partners if known.]
+
+**Slide 4: The Audience & Reach**
 - **Headline:** Engaging a Passionate Fanbase
-- **Data:** Reach: {r_audience}. Demographics: Petrolheads, DIYers, High Income.
-- **Visual Instruction:** [IMAGE: Wide shot of the crowd at a race event or a collage of social media fan interactions/comments.]
+- **Data:** {r_audience}. Demographics: 70% Male, 25-45 age group (Estimate). 
+- **Visual:** [CHART: Minimalist bar chart showing growth. IMAGE: Crowds at the track.]
 
-**Slide 4: Why {l_name}? (The Alignment)**
-- **Headline:** Drivers of Success
+**Slide 5: Broadcast Power (The Platform)**
+- **Headline:** Global Visibility
+- **Content:** "TV Coverage on Eurosport/TNT/Local Channel. Live Streaming. Social Media Clips."
+- **Visual:** [IMAGE: Screenshot of a TV broadcast overlay or a 'Live' camera icon over a track shot.]
+
+**Slide 6: Why {l_name}? (The Alignment)**
+- **Headline:** shared Vision
 - **Content:** {prop_hook}
-- **Visual Instruction:** [IMAGE: Split screen or composite. Left: {r_name}'s branding. Right: {l_name}'s logo or storefront. Caption: 'Shared Values'.]
+- **Visual:** [IMAGE: Split screen - {r_name} Action Left | {l_name} Logo/Storefront Right.]
 
-**Slide 5: Activation Strategy (What we will do)**
-- **Headline:** More Than Just a Sticker
+**Slide 7: Activation Strategy (ROI)**
+- **Headline:** Driving Return on Investment
 - **Bullet Points:**
 {prop_ideas}
-- **Visual Instruction:** [IMAGE: Mockup of the bike/car with {l_name}'s logo placed clearly on the side fairing/door. OR a photo of {r_name} holding a product.]
+- **Visual:** [IMAGE: Lifestyle photo of {r_name} using a product or interacting with fans.]
 
-**Slide 6: The Investment**
+**Slide 8: Brand Visibility (The Assets)**
+- **Headline:** Your Brand on the Grid
+- **List:** Bike Branding, Leathers, Helmet, Garage Walls, Transporter.
+- **Visual:** [IMAGE: A clear mockup of the bike/car with '{l_name}' logo placed on the main side panel.]
+
+**Slide 9: The Investment Package**
 - **Headline:** {prop_ask}
-- **Content:** Deliverables: Branding, Content, Experiences. ROI focused.
-- **Visual Instruction:** [IMAGE: Photo of {r_name} shaking hands with a fan or team member, symbolizing partnership and trust.]
+- **Content:** Full Title Rights, VIP Hospitality Passes, Content Days, Social Media Access.
+- **Visual:** [IMAGE: Premium paddock pass or hospitality view.]
 
-**Slide 7: Next Steps**
-- **Headline:** Let's Start Your Engine
-- **Call to Action:** Meeting to finalize agreement.
+**Slide 10: Next Steps**
+- **Headline:** Let's Race Together
+- **Call to Action:** Meeting to finalize.
 - **Contact:** {st.session_state.user_email}
-- **Visual Instruction:** [IMAGE: 'Thank You' text overlay on a darkened background image of a race car crossing the finish line.]
+- **Visual:** [IMAGE: 'Thank You' text over a high-contrast image of the finish line flag.]
 """
-                        st.success("Prompt Generated! Copy below:")
+                        st.success("✨ 'Winning Formula' Prompt Generated! (JK66 Style)")
                         st.code(manus_prompt, language=None)
-                        st.caption("🚀 Go to https://manus.im/app and paste this into the input box.")
+                        st.caption("🚀 Go to https://manus.im/app and paste this. It uses the structure of a proven winning deck.")
 
     else:
         st.info("👈 Go to Dashboard or Search to select a lead.")
