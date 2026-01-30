@@ -12,7 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Sponsor Finder V2.3", page_icon="🏍️", layout="wide")
+st.set_page_config(page_title="Sponsor Finder V2.4", page_icon="🏍️", layout="wide")
 
 # Initialize DB
 db.init_db()
@@ -1093,61 +1093,61 @@ if current_tab == " Search & Add":
             st.session_state.leads = pd.DataFrame(results)
             st.success(f"Found {len(results)} potential targets!")
 
-        # Post-Processing: Check for Duplicates
+    # Post-Processing: Check for Duplicates (Run always if leads exist)
+    if not st.session_state.leads.empty:
         # 1. Fetch current user leads
         my_leads = db.get_leads(st.session_state.user_id)
         existing_names = {l["Business Name"].lower() for l in my_leads}
         
         # 2. Add "In List" column
         df_results = st.session_state.leads.copy()
-        if not df_results.empty:
-            df_results["In List"] = df_results["Business Name"].apply(lambda x: "✅" if str(x).lower() in existing_names else "")
+        df_results["In List"] = df_results["Business Name"].apply(lambda x: "✅" if str(x).lower() in existing_names else "")
         
-            # MAP DISPLAY (If lat/lon ok)
-            if "lat" in df_results.columns:
-                 st.map(df_results)
-                 
-            # Show Website in table
-            disp_cols = ["In List", "Business Name", "Address", "Sector", "Rating"]
-            if "Website" in df_results.columns:
-                disp_cols.insert(3, "Website")
+        # MAP DISPLAY (If lat/lon ok)
+        if "lat" in df_results.columns:
+                st.map(df_results)
                 
-            st.dataframe(
-                 df_results[disp_cols],
-                 use_container_width=True
-            )
-    
+        # Show Website in table
+        disp_cols = ["In List", "Business Name", "Address", "Sector", "Rating"]
+        if "Website" in df_results.columns:
+            disp_cols.insert(3, "Website")
             
-            # Add to DB Logic
-            col_s1, col_s2 = st.columns([3, 1])
-            with col_s1:
-                # Filter out already added ones for the dropdown preference, or just show all
-                add_choice = st.selectbox("Select result to track", df_results["Business Name"].unique())
-            with col_s2:
-                # Check status
-                is_in_list = add_choice.lower() in existing_names
-                
-                if st.button("➕ Add to My Leads", disabled=is_in_list):
-                    if is_in_list:
-                        st.error("Already in your list!")
-                    else:
-                        # Get full row
-                        row = df_results[df_results["Business Name"] == add_choice].iloc[0]
-                        
-                        # Extract fields safely
-                        b_name = row["Business Name"]
-                        b_sect = row["Sector"]
-                        b_loc = row["Address"]
-                        b_web = row.get("Website", "") # Safe get
-                        
-                        # Pass explicit args to match db_manager signature
-                        try:
-                             new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
-                        except Exception as e:
-                             st.error(f"Critical Error in add_lead: {e}")
-                             new_lead_id = None
-                             
-                        if new_lead_id:
+        st.dataframe(
+                df_results[disp_cols],
+                use_container_width=True
+        )
+    
+        
+        # Add to DB Logic
+        col_s1, col_s2 = st.columns([3, 1])
+        with col_s1:
+            # Filter out already added ones for the dropdown preference, or just show all
+            add_choice = st.selectbox("Select result to track", df_results["Business Name"].unique())
+        with col_s2:
+            # Check status
+            is_in_list = add_choice.lower() in existing_names
+            
+            if st.button("➕ Add to My Leads", disabled=is_in_list):
+                if is_in_list:
+                    st.error("Already in your list!")
+                else:
+                    # Get full row
+                    row = df_results[df_results["Business Name"] == add_choice].iloc[0]
+                    
+                    # Extract fields safely
+                    b_name = row["Business Name"]
+                    b_sect = row["Sector"]
+                    b_loc = row["Address"]
+                    b_web = row.get("Website", "") # Safe get
+                    
+                    # Pass explicit args to match db_manager signature
+                    try:
+                            new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                    except Exception as e:
+                            st.error(f"Critical Error in add_lead: {e}")
+                            new_lead_id = None
+                            
+                    if new_lead_id:
                             st.toast(f"Added {add_choice} to Dashboard!")
                             
                             # [NEW] Auto-Switch for SCOUT MODE
