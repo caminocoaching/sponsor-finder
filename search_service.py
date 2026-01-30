@@ -88,7 +88,7 @@ def get_lat_long(api_key, location_name):
         pass
     return None, None
 
-def search_google_places(api_key, query, location_ctx, radius_miles, pagetoken=None):
+def search_google_places(api_key, query, location_ctx, radius_miles, sector_name=None, pagetoken=None):
     """
     Searches Google Places API (New Text Search).
     Returns (results_list, next_page_token).
@@ -158,7 +158,7 @@ def search_google_places(api_key, query, location_ctx, radius_miles, pagetoken=N
                 "Business Name": name,
                 "Address": addr,
                 "Rating": rating,
-                "Sector": "Search Result",
+                "Sector": sector_name if sector_name else "Search Result",
                 "Website": website,
                 "lat": lat,
                 "lon": lon

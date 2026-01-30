@@ -1061,7 +1061,8 @@ if current_tab == " Search & Add":
             with st.spinner("Scanning Page 1..."):
                 if google_api_key:
                     # REAL SEARCH - Page 1
-                    results, next_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius)
+                    sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
+                    results, next_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg)
                     
                     if isinstance(results, dict) and "error" in results:
                         st.error(f"Google API Error: {results['error']}")
@@ -1087,7 +1088,8 @@ if current_tab == " Search & Add":
         if st.button("⬇️ Load Next 20 Results"):
              with st.spinner("Fetching next page..."):
                  token = st.session_state.next_page_token
-                 new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, pagetoken=token)
+                 sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
+                 new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg, pagetoken=token)
                  
                  if new_results:
                      # Append to existing DataFrame
