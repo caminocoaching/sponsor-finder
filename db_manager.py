@@ -239,14 +239,19 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     if not next_action_date:
         next_action_date = datetime.now().strftime("%Y-%m-%d")
 
-    c.execute('''INSERT INTO leads (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-              (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json))
-    
-    new_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    return new_id
+    try:
+        c.execute('''INSERT INTO leads (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json))
+        
+        new_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return new_id
+    except Exception as e:
+        st.error(f"❌ Local Database Error: {e}")
+        conn.close()
+        return False
 
 def get_leads(user_id):
     if airtable_manager.is_configured():

@@ -12,7 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Sponsor Finder V2.2", page_icon="🏍️", layout="wide")
+st.set_page_config(page_title="Sponsor Finder V2.3", page_icon="🏍️", layout="wide")
 
 # Initialize DB
 db.init_db()
@@ -1141,7 +1141,12 @@ if current_tab == " Search & Add":
                         b_web = row.get("Website", "") # Safe get
                         
                         # Pass explicit args to match db_manager signature
-                        new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                        try:
+                             new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                        except Exception as e:
+                             st.error(f"Critical Error in add_lead: {e}")
+                             new_lead_id = None
+                             
                         if new_lead_id:
                             st.toast(f"Added {add_choice} to Dashboard!")
                             
