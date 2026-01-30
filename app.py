@@ -1612,68 +1612,72 @@ Supply a source URL for every data point. Do not guess emails."""
                             st.warning("⚠️ You haven't logged any Discovery Call answers. The proposal might lack specific client details.")
                         
                         manus_prompt = f"""
-Create a high-impact 10-slide sponsorship deck for '{r_name}' (Motorsport Athlete) pitching to '{l_name}'.
-**Style Ref:** MODELED ON JOEL KELSO 'JK66' PRESENTATION. Professional, Data-Heavy, ROI-Focused.
+Create a cutting-edge "2026 Future-Ready" sponsorship deck for '{r_name}' pitching to '{l_name}'.
+**Framework:** 'Success-Focused 2026 Motorsport Sponsorship Manus Strategy'.
+**Key Pillars:** Data-Driven Performance, Digital Innovation (VR/Esports), Sustainability (ESG), Measurable ROI.
 
 **Context:**
-- **Rider:** {r_name} ({r_series}). Values: Speed, Precision, Trust.
-- **Audience:** {r_audience}, High disposable income, petrolheads.
-- **Prospect:** {l_name} (Sector: {lead.get('Sector')}). Context: {disc_context}
-- **Tone:** {prop_tone}.
+- **Rider:** {r_name} ({r_series}).
+- **Audience:** {r_audience}.
+- **Prospect:** {l_name} (Sector: {lead.get('Sector')}). 
+- **Discovery Insights:** \n{disc_context}
+- **Tone:** {prop_tone}. Future-facing, Professional.
 
 ---
-**Structure (Slide by Slide):**
+**Structure (10 Slides - 2026 Standard):**
 
-**Slide 1: Title**
-- **Text:** {r_name} x {l_name} | Partnership Proposal {datetime.now().year}
-- **Visual:** [IMAGE: Cinematic headshot of {r_name} in full race gear, helmet off, looking impactful.]
+**Slide 1: The Vision (Title)**
+- **Title:** {r_name} x {l_name}: A Partnership for 2026 & Beyond
+- **Subtitle:** Innovation. Sustainability. Performance.
+- **Visual:** [IMAGE: Futuristic/High-Contrast shot of {r_name} with digital data overlay or HUD elements.]
 
-**Slide 2: The Athlete (Who is {r_name}?)**
+**Slide 2: The Athlete & The Data**
 - **Content:** {r_bio}
-- **Highlights:** List key recent race results (Podiums, Wins) as bullet points.
-- **Visual:** [IMAGE: Action shot on track, knee down, blurring background for speed.]
+- **Data:** {r_series} Stats + Sim Racing/Esports presence (Digital Twin).
+- **Visual:** [IMAGE: Split screen: Real track action vs Sim/Digital representation.]
 
-**Slide 3: Brand Ambassador Credibility**
-- **Headline:** Trusted by Global Brands
-- **Content:** "Representing excellence. Professional, approachable, and media-savvy."
-- **Visual:** [IMAGE: {r_name} giving a TV interview or shaking hands with a VIP/Team Manager. Logos of current partners if known.]
+**Slide 3: The Digital Frontier (Innovation)**
+- **Headline:** Beyond the Track
+- **Content:** "Engaging Gen Z/Alpha via Sim Racing, VR paddock tours, and 24/7 Social Content."
+- **Visual:** [IMAGE: VR headset POV or Social Media 'Live' interface mockup.]
 
-**Slide 4: The Audience & Reach**
-- **Headline:** Engaging a Passionate Fanbase
-- **Data:** {r_audience}. Demographics: 70% Male, 25-45 age group (Estimate). 
-- **Visual:** [CHART: Minimalist bar chart showing growth. IMAGE: Crowds at the track.]
+**Slide 4: Sustainability Commitment (ESG)**
+- **Headline:** Racing Responsibly
+- **Content:** "Commitment to carbon-neutral travel, eco-friendly logistics, and promoting sustainable technology."
+- **Visual:** [IMAGE: Green-tinted action shot or 'Eco-Certified' graphic style.]
 
-**Slide 5: Broadcast Power (The Platform)**
-- **Headline:** Global Visibility
-- **Content:** "TV Coverage on Eurosport/TNT/Local Channel. Live Streaming. Social Media Clips."
-- **Visual:** [IMAGE: Screenshot of a TV broadcast overlay or a 'Live' camera icon over a track shot.]
+**Slide 5: Audience Intelligence**
+- **Headline:** Data-Driven Reach
+- **Data:** {r_audience}. Highlight: Tech-savvy, High disposable income, Eco-conscious.
+- **Visual:** [CHART: Infographic showing audience demographics and purchasing power.]
 
-**Slide 6: Why {l_name}? (The Alignment)**
-- **Headline:** shared Vision
-- **Content:** {prop_hook}
-- **Visual:** [IMAGE: Split screen - {r_name} Action Left | {l_name} Logo/Storefront Right.]
+**Slide 6: Strategic Alignment**
+- **Headline:** {prop_hook}
+- **Content:** Why {l_name} fits this future-ready platform.
+- **Visual:** [IMAGE: Product placement in a 'clean' high-tech garage environment.]
 
-**Slide 7: Activation Strategy (ROI)**
-- **Headline:** Driving Return on Investment
-- **Bullet Points:**
+**Slide 7: Activation Matrix (Year-Round)**
+- **Headline:** 365 Days of Impact
+- **Content:**
 {prop_ideas}
-- **Visual:** [IMAGE: Lifestyle photo of {r_name} using a product or interacting with fans.]
+- **Visual:** [IMAGE: Calendar timeline graphic showing Q1-Q4 activation spikes.]
 
-**Slide 8: Brand Visibility (The Assets)**
-- **Headline:** Your Brand on the Grid
-- **List:** Bike Branding, Leathers, Helmet, Garage Walls, Transporter.
-- **Visual:** [IMAGE: A clear mockup of the bike/car with '{l_name}' logo placed on the main side panel.]
+**Slide 8: The ROI Formula (Validation)**
+- **Headline:** Measurable Success
+- **Formula:** "Total Value = (Media Reach + Hospitality + Lead Gen) - Investment".
+- **Promise:** Quarterly detailed reports on Media Value & Engagement.
+- **Visual:** [IMAGE: Dashboard mockup showing graphs/analytics growing.]
 
-**Slide 9: The Investment Package**
+**Slide 9: Investment Tiers**
 - **Headline:** {prop_ask}
-- **Content:** Full Title Rights, VIP Hospitality Passes, Content Days, Social Media Access.
-- **Visual:** [IMAGE: Premium paddock pass or hospitality view.]
+- **Content:** Gold (Title), Silver (Major), Bronze (Partner). Focus on VALUE not cost.
+- **Visual:** [IMAGE: 3 Distinct 'Package' Icons or Cards.]
 
-**Slide 10: Next Steps**
-- **Headline:** Let's Race Together
-- **Call to Action:** Meeting to finalize.
+**Slide 10: The Finish Line (Action)**
+- **Headline:** Join the 2026 Grid
+- **Call to Action:** "Let's build the future today."
 - **Contact:** {st.session_state.user_email}
-- **Visual:** [IMAGE: 'Thank You' text over a high-contrast image of the finish line flag.]
+- **Visual:** [IMAGE: {r_name} looking ahead/upward, inspiring lighting.]
 """
                         st.success("✨ 'Winning Formula' Prompt Generated! (JK66 Style)")
                         st.code(manus_prompt, language=None)
