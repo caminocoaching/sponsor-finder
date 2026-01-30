@@ -1677,7 +1677,18 @@ Create a high-impact 10-slide sponsorship deck for '{r_name}' (Motorsport Athlet
 """
                         st.success("✨ 'Winning Formula' Prompt Generated! (JK66 Style)")
                         st.code(manus_prompt, language=None)
-                        st.caption("🚀 Go to https://manus.im/app and paste this. It uses the structure of a proven winning deck.")
+                        
+                        st.divider()
+                        st.markdown("### 📧 Send to Team")
+                        st.caption("1. Click the 'Copy' icon on the code block above.")
+                        st.caption("2. Click the button below to open your email.")
+                        st.caption("3. Paste the prompt into the email body.")
+                        
+                        subject = urllib.parse.quote(f"Manus Proposal Framework: {r_name} x {l_name}")
+                        mailto = f"mailto:team@caminocoaching.co.uk?subject={subject}&body=(Paste%20Manus%20Prompt%20Here)"
+                        st.link_button("📤 Open Email to team@caminocoaching.co.uk", mailto)
+                        
+                        st.caption("🚀 Or go to https://manus.im/app and paste directly.")
 
     else:
         st.info("👈 Go to Dashboard or Search to select a lead.")
