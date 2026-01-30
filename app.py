@@ -5,6 +5,7 @@ import random
 from datetime import datetime, timedelta
 import urllib.parse
 import db_manager as db
+import facebook_finder as fb_finder
 import json
 from search_service import mock_search_places, search_google_places
 from sheets_manager import sheet_manager
@@ -1257,53 +1258,136 @@ if current_tab == "✉️ Outreach Assistant":
                     
                     st.info(f"Targeting: **{lead['Business Name']}**" + (f" (`{domain}`)" if domain else ""))
                     
-                    # PILLAR 1: THE WEB DOCTRINE
-                    with st.expander("1️⃣ The Web (Deep Dive)", expanded=True):
+                    # PILLAR 1: WEB DEEP DIVE (FACT FINDING)
+                    st.markdown("### 1️⃣ Web Deep Dive (Fact Finding)")
+                    with st.expander("🌍 Web Intelligence", expanded=True):
+                        # --- OPERATOR BUILDER HELPER ---
+                        def google_link(query, label):
+                            url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                            st.markdown(f"• [{label}]({url})")
+
                         if domain:
-                            # --- OPERATOR BUILDER HELPER ---
-                            def google_link(query, label):
-                                url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
-                                st.markdown(f"• [{label}]({url})")
-
-                            st.markdown("##### 🎯 1. Decision Makers")
-                            google_link(f'site:linkedin.com/in "managing director" OR "CEO" OR "owner" OR "founder" "{lead["Business Name"]}"', "LinkedIn: Senior Leadership")
-                            google_link(f'site:twitter.com "{lead["Business Name"]}" AND ("sponsorship" OR "marketing" OR "partnerships")', "Twitter: Marketing Team")
-                            google_link(f'("{lead["Business Name"]}") AND ("managing director" OR "CEO" OR "marketing director") AND ("email" OR "phone" OR "LinkedIn")', "General: Identify Key People")
-
-                            st.markdown("##### 📞 2. Contact Information")
-                            google_link(f'"{lead["Business Name"]}" AND ("phone" OR "mobile" OR "email" OR "contact")', "Find Phones & Emails")
-                            google_link(f'"contact" OR "directory" OR "team" site:{domain}', "Internal Team Directory")
-                            google_link(f'site:linkedin.com/in "first_name last_name" "{lead["Business Name"]}"', "Verify Name on LinkedIn")
-
-                            st.markdown("##### 💰 3. Financials & Size")
-                            google_link(f'site:companieshouse.gov.uk "{lead["Business Name"]}" "directors" OR "officers"', "Companies House (UK) Directors")
-                            google_link(f'"{lead["Business Name"]}" AND ("annual revenue" OR "turnover" OR "sales" OR "net worth")', "Revenue & Net Worth")
-                            google_link(f'site:plimsoll.co.uk OR site:endole.co.uk "{lead["Business Name"]}"', "Financial Health Check")
-
-                            st.markdown("##### 🤝 4. Sponsorship History")
-                            google_link(f'"{lead["Business Name"]}" AND ("sponsored" OR "sponsorship" OR "supporting" OR "partnering")', "Past Sponsorship Activity")
-                            google_link(f'site:{domain} "sponsorship" OR "partners" OR "community" OR "charity"', "Company Policy: Giving Back")
-                            google_link(f'"{lead["Business Name"]}" AND ("marketing budget" OR "advertising spend")', "Marketing Spend Indicators")
-
-                            st.markdown("##### 📰 5. News & Strategy")
-                            google_link(f'site:prnewswire.com OR site:businesswire.com "{lead["Business Name"]}"', "Press Releases")
-                            google_link(f'site:{domain} filetype:pdf OR filetype:ppt "strategy" OR "report"', "Internal Strategy Documents (PDF/PPT)")
+                            st.caption(f"Searching domain: `{domain}`")
+                            # News & Strategy
+                            google_link(f'site:prnewswire.com OR site:businesswire.com "{lead["Business Name"]}"', "Press Releases (News)")
+                            google_link(f'site:{domain} filetype:pdf OR filetype:ppt "strategy" OR "report"', "Strategy Docs (PDF/PPT)")
                             google_link(f'related:{domain}', "Competitor Analysis")
+                            
+                            # Financials
+                            google_link(f'site:companieshouse.gov.uk "{lead["Business Name"]}" "directors"', "Companies House Directors")
+                            google_link(f'"{lead["Business Name"]}" AND ("revenue" OR "turnover" OR "profit")', "Revenue Check")
+                            
+                            # Sponsorship History
+                            google_link(f'"{lead["Business Name"]}" AND ("sport" OR "sponsorship" OR "partner")', "Past Sponsorships")
+                            google_link(f'"{lead["Business Name"]}" "sponsored by"', "'Sponsored By' Search")
+                            google_link(f'"{lead["Business Name"]}" (partnership OR "proud sponsor" OR "official partner")', "Partnership Announcements")
+                            google_link(f'site:.org "{lead["Business Name"]}" (donation OR sponsor)', "Charity & Grants (.org)")
                         else:
-                            st.warning("No website URL found. Run a Google Search to find their domain first.")
-                            q_gen = f'{lead["Business Name"]} official site'
-                            u_gen = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_gen)}"
-                            st.markdown(f"• [**Find Website**]({u_gen})")
+                            google_link(f'{lead["Business Name"]} official site', "Find Website First")
+                    
+                    
+                    # PILLAR 2: LINKEDIN PEOPLE SEARCH
+                    st.markdown("### 2️⃣ LinkedIn (People Search)")
+                    with st.expander("👔 LinkedIn Deep Search", expanded=True):
+                        st.caption("Find the decision makers directly.")
+                        # 1. Company Page
+                        google_link(f'site:linkedin.com/company "{lead["Business Name"]}"', "Official Company Page")
+                        
+                        # 2. X-Ray Search (All Employees)
+                        google_link(f'site:linkedin.com/in "{lead["Business Name"]}"', "All Employees (X-Ray Search)")
 
-                    # PILLAR 2: NEWS & TRENDS
-                    with st.expander("2️⃣ News & Trends"):
+                        # 3. Decision Makers (Specific Roles)
+                        st.markdown("**Find Decision Makers:**")
+                        google_link(f'site:linkedin.com/in "managing director" OR "CEO" OR "owner" "{lead["Business Name"]}"', "Top Level (CEO/MD/Owner)")
+                        google_link(f'site:linkedin.com/in "marketing director" OR "brand manager" "{lead["Business Name"]}"', "Marketing Lead")
+                        google_link(f'site:linkedin.com/in "sponsorship" OR "partnerships" "{lead["Business Name"]}"', "Sponsorship Manager")
+                        
+                        # Verify Name
+                        if lead.get('Contact Name'):
+                            st.markdown("**Verify Contact:**")
+                            google_link(f'site:linkedin.com/in "{lead["Contact Name"]}" "{lead["Business Name"]}"', f"Verify '{lead['Contact Name']}'")
+                            
+
+                    # PILLAR 3: FACEBOOK SEARCH & FINDER MODULE
+                    st.markdown("### 3️⃣ Facebook (Founder Finder)")
+                    with st.expander("👤 Facebook Founder Finder (Beta)", expanded=True):
+                        st.caption("Use this if you can't find a contact elsewhere. Target owners of local businesses.")
+                        
+                        # A) Standard Search Links
+                        st.markdown("**Manual Search:**")
+                        google_link(f'site:facebook.com "{lead["Business Name"]}"', "Company Facebook Page")
+                        google_link(f'site:facebook.com "{lead["Business Name"]}" "owner" OR "director"', "Find People associated with Company")
+                        
+                        st.divider()
+                        
+                        # B) THE FACEBOOK FOUNDER FINDER MODULE
+                        st.markdown("#### 🕵️‍♂️ Auto-The Finder Module")
+                        st.caption("Automated search for Founders & Directors on Facebook.")
+                        
+                        # Inputs
+                        fb_c1, fb_c2 = st.columns(2)
+                        # Smarter default: Try to grab the City (2nd part) if address is "Street, City, ..."
+                        addr_raw = lead.get('Address', '')
+                        addr_parts = addr_raw.split(',')
+                        if len(addr_parts) > 1:
+                            # Likely "123 Main St, London, UK" -> Take "London"
+                            default_town = addr_parts[1].strip()
+                        else:
+                            # Fallback to whole string or 'Unknown'
+                            default_town = addr_raw if addr_raw else "Unknown"
+                            
+                        fb_town = fb_c1.text_input("Town/City", value=default_town)
+                        fb_max = fb_c2.slider("Max Results", 3, 10, 5)
+                        
+                        if st.button("🚀 Run Facebook Deep Search"):
+                            if not fb_town or fb_town == "Unknown":
+                                st.error("Please enter a Town.")
+                            else:
+                                with st.spinner(f"Scraping Facebook for '{lead['Business Name']}' founders in '{fb_town}'..."):
+                                    # Call the Module
+                                    try:
+                                        fb_results = fb_finder.fb_search(lead["Business Name"], fb_town, fb_max)
+                                        
+                                        if "error" in fb_results:
+                                            st.error(f"Search Failed: {fb_results['error']}")
+                                            # Fallback
+                                            fb_results = fb_finder.mock_fb_search(lead["Business Name"], fb_town)
+                                            st.warning("Showing simulated results due to connection error.")
+                                        
+                                        if not fb_results:
+                                            st.warning("No profiles found. Try a broader town name.")
+                                        else:
+                                            # successful results
+                                            st.success(f"Found {len(fb_results)} potential profiles!")
+                                            for p in fb_results:
+                                                with st.container(border=True):
+                                                    c_p1, c_p2 = st.columns([3, 1])
+                                                    c_p1.markdown(f"**[{p['name']}]({p['fb_url']})**")
+                                                    c_p1.caption(p.get('role', 'Possible Match'))
+                                                    
+                                                    # DM Button (Messenger URL)
+                                                    # Logic: https://m.me/<USERNAME>?text=Hi+<Name>...
+                                                    # Need to extract username from URL
+                                                    try:
+                                                        # fb.com/john.doe.123 -> john.doe.123
+                                                        # fb.com/profile.php?id=123 -> profile.php?id=123 (might not work with m.me)
+                                                        username = p['fb_url'].rstrip("/").split("/")[-1]
+                                                        msg_text = urllib.parse.quote(f"Hi {p['name'].split()[0]}, spotted {lead['Business Name']} and wanted to connect.")
+                                                        dm_link = f"https://m.me/{username}?text={msg_text}"
+                                                        
+                                                        c_p2.link_button("💬 DM", dm_link)
+                                                    except:
+                                                        pass
+                                                        
+                                    except Exception as e:
+                                        st.error(f"Module Error: {e}")
                         # Intitle Search
                         q_news = f'intitle:"{lead["Business Name"]}" "merger" OR "launch" OR "lawsuit"'
                         u_news = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_news)}"
                         st.markdown(f"• [**High Impact Headlines**]({u_news})")
                         
-                        # Recent (After 2024 - Dynamic could be better but hardcoding roughly for now)
-                        q_rec = f'"{lead["Business Name"]}" after:2024-01-01'
+                        # Recent (After 2025)
+                        q_rec = f'"{lead["Business Name"]}" after:2025-01-01'
                         u_rec = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_rec)}"
                         st.markdown(f"• [**Latest News (Last 12mo)**]({u_rec})")
                         
@@ -1313,39 +1397,10 @@ if current_tab == "✉️ Outreach Assistant":
                             u_no_pr = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_no_pr)}"
                             st.markdown(f"• [**External Press Only**]({u_no_pr})")
 
-                    # PILLAR 3: SPONSORSHIP HISTORY
-                    with st.expander("3️⃣ Sponsorship History"):
-                        # Sponsored By
-                        q_spon = f'"sponsored by" AND "{lead["Business Name"]}"'
-                        u_spon = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_spon)}"
-                        st.markdown(f"• [**'Sponsored By' Search**]({u_spon})")
-                        
-                        # Partnership Announcements
-                        q_part = f'"{lead["Business Name"]}" (partnership OR "proud sponsor" OR "official partner")'
-                        u_part = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_part)}"
-                        st.markdown(f"• [**Partnership Announcements**]({u_part})")
-                        
-                        # Charity/Grants
-                        q_org = f'site:.org "{lead["Business Name"]}" (donation OR sponsor)'
-                        u_org = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_org)}"
-                        st.markdown(f"• [**Charity & Grants (.org)**]({u_org})")
 
-                    # PILLAR 4: LINKEDIN X-RAY
-                    with st.expander("4️⃣ LinkedIn Intel"):
-                        # X-Ray People
-                        q_xray = f'site:linkedin.com/in "{lead["Business Name"]}"'
-                        u_xray = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_xray)}"
-                        st.markdown(f"• [**All Employees (X-Ray)**]({u_xray})")
-                        
-                        # Specific Roles
-                        q_role = f'site:linkedin.com/in "{lead["Business Name"]}" "Marketing" OR "Sponsorship" OR "Brand"'
-                        u_role = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_role)}"
-                        st.markdown(f"• [**Find Decision Makers**]({u_role})")
-                        
-                        # Company Page
-                        q_co = f'site:linkedin.com/company "{lead["Business Name"]}"'
-                        u_co = f"https://www.google.com/search?q={urllib.parse.quote_plus(q_co)}"
-                        st.markdown(f"• [**Official Company Page**]({u_co})")
+
+
+
                     
                     st.divider()
                     
