@@ -1160,25 +1160,25 @@ if current_tab == " Search & Add":
                     
                     # Pass explicit args to match db_manager signature
                     try:
-                            new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                        new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
                     except Exception as e:
-                            st.error(f"Critical Error in add_lead: {e}")
-                            new_lead_id = None
-                            
+                        st.error(f"Critical Error in add_lead: {e}")
+                        new_lead_id = None
+                        
                     if new_lead_id:
-                            st.toast(f"Added {add_choice} to Dashboard!")
-                            
-                            # [NEW] Auto-Switch for SCOUT MODE
-                            if search_mode == "Company Scout":
-                                st.session_state.selected_lead_id = new_lead_id
-                                st.session_state.requested_tab = "✉️ Outreach Assistant"
-                                st.rerun()
-                                
-                            # Force rerun to update duplicate list
-                            time.sleep(1)
+                        st.toast(f"Added {add_choice} to Dashboard!")
+                        
+                        # [NEW] Auto-Switch for SCOUT MODE
+                        if search_mode == "Company Scout":
+                            st.session_state.selected_lead_id = new_lead_id
+                            st.session_state.requested_tab = "✉️ Outreach Assistant"
                             st.rerun()
-                        else:
-                            st.warning("Could not add lead. See error message above.")
+                            
+                        # Force rerun to update duplicate list
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.warning("Could not add lead. See error message above.")
                 if is_in_list:
                     st.caption("Detailed marked as added.")
 
