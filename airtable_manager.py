@@ -20,10 +20,10 @@ class AirtableManager:
             "Address": "address",
             "Website": "website",
             "Status": "status",
-            "Contact Name": "contact name",
             "Last Contact": "last contact",
-            "Next Action": "next action",
-            "Notes JSON": "notes json"
+            "Next Action": "next action"
+            # "Contact Name": "contact name", # Missing in Airtable
+            # "Notes JSON": "notes json"      # Missing in Airtable
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
@@ -209,18 +209,32 @@ class AirtableManager:
             notes_str = str(notes_input)
 
         # Prepare payload with MAPPED keys
-        fields = {
-            self.FIELD_MAP["User Email"]: user_email,
-            self.FIELD_MAP["Business Name"]: lead_data.get("Business Name", ""),
-            self.FIELD_MAP["Sector"]: lead_data.get("Sector", ""),
-            self.FIELD_MAP["Address"]: lead_data.get("Address", ""),
-            self.FIELD_MAP["Website"]: lead_data.get("Website", ""),
-            self.FIELD_MAP["Status"]: lead_data.get("Status", "Pipeline"),
-            self.FIELD_MAP["Contact Name"]: lead_data.get("Contact Name", ""),
-            self.FIELD_MAP["Last Contact"]: lc,
-            self.FIELD_MAP["Next Action"]: lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
-            self.FIELD_MAP["Notes JSON"]: notes_str
-        }
+        # Prepare payload with MAPPED keys
+        # Verify field exists in map before adding
+        fields = {}
+        
+        # User Email (Required)
+        if "User Email" in self.FIELD_MAP:
+             fields[self.FIELD_MAP["User Email"]] = user_email
+             
+        # Optional fields
+        mappings = [
+            ("Business Name", lead_data.get("Business Name", "")),
+            ("Sector", lead_data.get("Sector", "")),
+            ("Address", lead_data.get("Address", "")),
+            ("Website", lead_data.get("Website", "")),
+            ("Status", lead_data.get("Status", "Pipeline")),
+            ("Contact Name", lead_data.get("Contact Name", "")),
+            ("Last Contact", lc),
+            ("Next Action", lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d"))),
+            ("Notes JSON", notes_str)
+        ]
+        
+        for app_key, val in mappings:
+            # ONLY add if mapped and the column actually exists in our hardcoded map
+            # (We assume the hardcoded map matches Airtable, which we are editing now)
+            if app_key in self.FIELD_MAP:
+                 fields[self.FIELD_MAP[app_key]] = val
 
         payload = {
             "records": [
