@@ -12,7 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Sponsor Finder V2.4", page_icon="🏍️", layout="wide")
+st.set_page_config(page_title="Sponsor Finder V2.5", page_icon="🏍️", layout="wide")
 
 # Initialize DB
 db.init_db()
@@ -1059,39 +1059,57 @@ if current_tab == " Search & Add":
 
     st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
     
+    st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
+    
+    # NEW SEARCH (Reset)
     if st.button("Run Search (Scout)", type="primary"):
+        st.session_state.leads = pd.DataFrame() # Clear old
+        st.session_state.next_page_token = None
+        
         if search_mode == "Company Scout" and not scout_company:
              st.error("Please enter a Company Name to scout.")
         else:
-            with st.spinner("Scanning..."):
+            with st.spinner("Scanning Page 1..."):
                 if google_api_key:
-                    # REAL SEARCH
-                    # For Scout, query covers location, so radius is less critical but still passed
-                    results = search_google_places(google_api_key, search_query, location_search_ctx, search_radius)
+                    # REAL SEARCH - Page 1
+                    results, next_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius)
+                    
                     if isinstance(results, dict) and "error" in results:
                         st.error(f"Google API Error: {results['error']}")
-                        results = [] # Fallback or empty
-                    elif not results:
-                        st.warning("No results found via Google. Try a wider radius.")
-                else:
-                    # MOCK SEARCH
-                    mode_arg = "previous" if search_mode == "Company Scout" else "sector" # reusing mock logic slightly modified
-                    if search_mode == "Company Scout":
-                         # Return just one mock result for the specific company
-                         results = [{
-                            "Business Name": scout_company if scout_company else "Mock Company Ltd", 
-                            "Address": f"123 {scout_location if scout_location else 'London'}, UK",
-                            "Rating": 4.8,
-                            "Sector": "Targeted Scout", 
-                            "Website": "https://www.example.com",
-                            "lat": 52.0, "lon": -1.0
-                         }]
                     else:
-                        results = mock_search_places(location_search_ctx, search_radius, search_query, mode=mode_arg)
-                    st.info("ℹ️ Using Demo Mode (Mock Results). Add an API Key for real data.")
-                
-            st.session_state.leads = pd.DataFrame(results)
-            st.success(f"Found {len(results)} potential targets!")
+                        st.session_state.leads = pd.DataFrame(results)
+                        st.session_state.next_page_token = next_token
+                        
+                        if not results:
+                             st.warning("No results found.")
+                        else:
+                             st.success(f"Found {len(results)} targets on Page 1.")
+                             
+                else:
+                    # MOCK SEARCH (unchanged)
+                    mode_arg = "previous" if search_mode == "Company Scout" else "sector"
+                    results = mock_search_places(location_search_ctx, search_radius, search_query, mode=mode_arg)
+                    st.session_state.leads = pd.DataFrame(results)
+                    st.session_state.next_page_token = None
+                    st.info("ℹ️ Demo Mode.")
+
+    # LOAD MORE BUTTON
+    if st.session_state.get("next_page_token"):
+        if st.button("⬇️ Load Next 20 Results"):
+             with st.spinner("Fetching next page..."):
+                 token = st.session_state.next_page_token
+                 new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, pagetoken=token)
+                 
+                 if new_results:
+                     # Append to existing DataFrame
+                     new_df = pd.DataFrame(new_results)
+                     st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
+                     st.success(f"Added {len(new_results)} more! Total: {len(st.session_state.leads)}")
+                 
+                 st.session_state.next_page_token = new_token # Update token (or None if done)
+                 if not new_token:
+                     st.info("✅ All pages loaded.")
+                 st.rerun()
 
     # Post-Processing: Check for Duplicates (Run always if leads exist)
     if not st.session_state.leads.empty:
