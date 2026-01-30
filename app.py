@@ -578,25 +578,9 @@ with st.sidebar:
     st.write(f"**Racing:** {user_profile.get('vehicle', 'Racer')}")
     st.write(f"**Series:** {championship}")
     
-    with st.expander("Edit / Upload Data", expanded=False):
-        with st.form("profile_form"):
-            p_name = st.text_input("Name", value=rider_name)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                p_town = st.text_input("Town", value=saved_town)
-            with c2:
-                p_country = st.text_input("Country", value=saved_country)
-                
-            c3, c4 = st.columns(2)
-            with c3:
-                p_state = st.text_input("State", value=saved_state)
-            with c4:
-                p_zip = st.text_input("Zip Code", value=saved_zip)
-            
-            # [NEW] File Uploaders
-            f_audit = st.file_uploader("Social Media Audit (CSV)", type="csv")
-            f_prod = st.file_uploader("Product Worksheet (CSV)", type="csv")
+    if st.button("Access Profile", type="primary"):
+        st.session_state.force_tab = "5. Profile & Data"
+        st.rerun()
             
             # Update additional stats
             p_goal = st.text_input("Season Goal", value=user_profile.get('goal', 'Top 5'))
@@ -1563,160 +1547,166 @@ Supply a source URL for every data point. Do not guess emails."""
                 
             elif stage == "3. Proposal":
                 st.subheader(f"📝 Proposal Creator for {lead['Business Name']}")
-                st.caption("Follow these 4 steps to build a 10/10 'Success-Focused 2026' Proposal.")
+                st.caption("Auto-filled from your Profile & Discovery Call. Edit any section below to perfect your '10/10 Template'.")
                 
-                # --- STEP 1: DISCOVERY DATA ---
-                st.markdown("#### Step 1: Review Discovery Data")
+                # --- PREPARE DATA ---
+                r_name = st.session_state.user_name
+                r_series = championship
+                r_bio = st.session_state.user_profile.get('bio', f"A competitive racer in {r_series}. Known for consistency and speed.")
+                r_audience = f"{st.session_state.user_profile.get('social_following', 'Growing')} Followers"
+                l_name = lead['Business Name']
                 l_notes = lead.get('Notes', {})
+
+                # Deep Discovery Context
                 disc_context = "**Deep Discovery Findings (Client Voice):**\n"
                 has_answers = False
-                
-                with st.expander("View Discovery Answers", expanded=True):
-                    for i, question_text in enumerate(DISCOVERY_QUESTIONS):
-                        key = f"Q{i+1}"
-                        answer = l_notes.get(key, "").strip()
-                        if answer:
-                            has_answers = True
-                            st.write(f"**{question_text}**")
-                            st.info(f"Client: {answer}")
-                            disc_context += f"- **Issue/Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
-                        else:
-                            st.write(f"**{question_text}**")
-                            st.caption("❌ No answer logged.")
+                for i, question_text in enumerate(DISCOVERY_QUESTIONS):
+                    key = f"Q{i+1}"
+                    answer = l_notes.get(key, "").strip()
+                    if answer:
+                        has_answers = True
+                        disc_context += f"- **Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
                 
                 if not has_answers:
-                     st.warning("⚠️ CRITICAL: You have no Discovery Data. The proposal will be generic. Go back to 'Discovery Call' to fix this.")
-                     disc_context += "(⚠️ NO DISCOVERY DATA LOGGED. PROPOSAL WILL LACK CONTEXT.)"
+                     st.warning("⚠️ No Discovery Data found. Using generic placeholders.")
 
-                st.divider()
-
-                # --- STEP 2: STRATEGY GAPS ---
-                st.markdown("#### Step 2: Strategic Gaps (The 2026 Edge)")
-                st.caption("We need your input to tailor the 'Hook', 'Activations', and 'Ask'.")
-                
-                with st.form("proposal_gaps"):
-                    st.write("**For Slide 6 (Strategic Alignment):**")
-                    prop_hook = st.text_area("Why is this partnership a 'perfect fit' right now?", 
-                                           value=f"Because {lead['Business Name']} is targeting...",
-                                           help="The 'Hook'. Why them? Why you? Why 2026?", height=100)
+                # --- STEP 1: THE TEMPLATE BUILDER ---
+                with st.form("deck_builder"):
+                    st.markdown("### 🏗️ The 2026 Strategy Deck (10 Slides)")
                     
-                    st.write("**For Slide 7 (Activation Matrix):**")
-                    prop_ideas = st.text_area("List 3 Activation Ideas (What will you actually DO?)", 
-                                            value="1. VR Paddock Experience for VIPs.\n2. Co-branded Sustainability Content Series.\n3. 'Digital Twin' logo placement in Sim Racing.",
-                                            help="Think 2026: Esports, VR, Sustainability, Content.", height=100)
-                    
-                    col_p1, col_p2 = st.columns(2)
-                    with col_p1:
-                         st.write("**For Slide 9 (The Ask):**")
-                         prop_ask = st.text_input("Proposed Tier / Investment", value="Gold Partner (£15,000)", help="Be specific.")
-                    with col_p2:
-                         st.write("**Proposal Tone:**")
-                         prop_tone = st.selectbox("Tone", ["Future-Ready & Professional (Recommended)", "High Energy & Aggressive", "Personal & Story-Driven"])
-
-                    # --- STEP 3: VISUALS ---
-                    st.divider()
-                    st.markdown("#### Step 3: Visual Polish")
-                    st.caption(f"We need the **{lead['Business Name']}** logo for Slide 1.")
-                    logo_file = st.file_uploader("Upload Logo (Screenshot from website)", type=["png", "jpg", "jpeg"])
-                    if logo_file:
-                        st.image(logo_file, width=100)
-                        st.caption("✅ Logo Attached")
-                    else:
-                        st.info(f"👉 Go to {lead.get('Website', 'their website')}, take a screenshot, and upload it.")
-
-                    st.divider()
-                    
-                    # --- STEP 4: GENERATE ---
-                    st.markdown("#### Step 4: Generate")
-                    if st.form_submit_button("✨ Create '2026 Future-Ready' Strategy"):
+                    # Slide 1
+                    with st.expander("Slide 1: The Vision (Title)", expanded=False):
+                        s1_title = st.text_input("Title", value=f"{r_name} x {l_name}: A Partnership for 2026")
+                        s1_sub = st.text_input("Subtitle", value="Innovation. Sustainability. Performance.")
                         
-                        # Data Mapping
-                        r_name = st.session_state.user_name
-                        r_series = championship
-                        r_bio = st.session_state.user_profile.get('bio', f"A competitive racer in {r_series}")
-                        r_audience = f"{st.session_state.user_profile.get('social_following', 'Growing')} Followers"
-                        l_name = lead['Business Name']
+                    # Slide 2
+                    with st.expander("Slide 2: The Athlete (Bio & Data)", expanded=False):
+                        s2_bio = st.text_area("Bio Content", value=r_bio)
+                        s2_stats = st.text_input("Key Stats", value=f"{r_series} Competitor. Podium Contender.")
+                        
+                    # Slide 3 (Innovation)
+                    with st.expander("Slide 3: Digital Innovation (VR/Esports)", expanded=False):
+                        s3_content = st.text_area("Sim/Digital Strategy", value="Engaging Gen Z via Sim Racing, VR paddock tours, and 'Digital Twin' marketing.")
+                        
+                    # Slide 4 (ESG)
+                    with st.expander("Slide 4: Sustainability (ESG)", expanded=False):
+                        s4_content = st.text_area("Green Commitment", value="Commitment to carbon-neutral travel, eco-friendly logistics, and promoting sustainable technology.")
+                        
+                    # Slide 5 (Audience)
+                    audience_source = "Growing Fanbase"
+                    # Try to get data from CSV Audit
+                    if 'social_audit_data' in st.session_state.user_profile:
+                        # Format detailed breakdown
+                        audit = st.session_state.user_profile['social_audit_data']
+                        total = st.session_state.user_profile.get('social_following', 'Unknown')
+                        audience_source = f"Total Reach: {total}. (Verified via Social Audit)"
+                    else:
+                         audience_source = f"Reach: {r_audience}"
 
+                    with st.expander("Slide 5: Audience Intelligence", expanded=False):
+                        s5_data = st.text_area("Demographics", value=f"{audience_source}. \nProfile: Tech-savvy, High disposable income, 70% Male / 30% Female.")
+
+                    # Slide 6 (Alignment - THE HOOK)
+                    st.info("👇 **CRITICAL: Why them? Why now?**")
+                    with st.container(border=True):
+                        st.markdown("**Slide 6: Strategic Alignment (The Hook)**")
+                        default_hook = f"Because {l_name} values performance. Our audience matches their target market..."
+                        if has_answers: default_hook += f"\n(Based on Discovery: {l_notes.get('Q2', '')})"
+                        s6_hook = st.text_area("The Alignment Story", value=default_hook, height=100)
+
+                    # Slide 7 (Activations)
+                    st.info("👇 **CRITICAL: What will you DO?**")
+                    with st.container(border=True):
+                        st.markdown("**Slide 7: Activation Matrix**")
+                        s7_ideas = st.text_area("3 Concrete Ideas", value="1. VIP Trackside Experience.\n2. Co-branded Content Series.\n3. Logo on Bike & Leathers.", height=100)
+
+                    # Slide 8 (ROI)
+                    with st.expander("Slide 8: Transformation / ROI", expanded=False):
+                        s8_formula = st.text_input("ROI Promise", value="Total Value = (Media Reach + Hospitality + Lead Gen) - Investment")
+                    
+                    # Slide 9 (The Ask)
+                    st.info("👇 **CRITICAL: The Deal**")
+                    with st.container(border=True):
+                        st.markdown("**Slide 9: Investment Tiers**")
+                        s9_ask = st.text_input("Proposed Package", value="Gold Partner (£15,000) - Title Rights")
+
+                    # Slide 10 (Next Steps)
+                    with st.expander("Slide 10: The Finish Line", expanded=False):
+                        s10_cta = st.text_input("Call to Action", value="Let's build the future today.")
+
+                    # Logo
+                    st.divider()
+                    st.markdown("### 📸 Visuals")
+                    st.caption(f"Upload **{l_name}** Logo for Slide 1.")
+                    logo_file = st.file_uploader("Upload Logo", type=["png", "jpg"])
+
+                    # GENERATE
+                    st.divider()
+                    if st.form_submit_button("✨ Generate Final Manus Prompt"):
+                        
+                        # Build the prompt from the form values
                         manus_prompt = f"""
 Create a cutting-edge "2026 Future-Ready" sponsorship deck for '{r_name}' pitching to '{l_name}'.
 **Framework:** 'Success-Focused 2026 Motorsport Sponsorship Manus Strategy'.
-**Key Pillars:** Data-Driven Performance, Digital Innovation (VR/Esports), Sustainability (ESG), Measurable ROI.
+**Tone:** Future-facing, Professional, Winning.
 
-**Context:**
-- **Rider:** {r_name} ({r_series}).
-- **Audience:** {r_audience}.
-- **Prospect:** {l_name} (Sector: {lead.get('Sector')}). 
-- **Discovery Insights:** \n{disc_context}
-- **Tone:** {prop_tone}. Future-facing, Professional.
+**Discovery Context:**
+{disc_context}
 
 ---
-**Structure (10 Slides - 2026 Standard):**
+**Structure (10 Slides - Defined Content):**
 
-**Slide 1: The Vision (Title)**
-- **Title:** {r_name} x {l_name}: A Partnership for 2026 & Beyond
-- **Subtitle:** Innovation. Sustainability. Performance.
-- **Visual:** [IMAGE: Futuristic/High-Contrast shot of {r_name} with digital data overlay or HUD elements.]
+**Slide 1: {s1_title}**
+- **Subtitle:** {s1_sub}
+- **Visual:** [IMAGE: Cinematic/High-Contrast shot of {r_name}. Logo Overlay if available.]
 
-**Slide 2: The Athlete & The Data**
-- **Content:** {r_bio}
-- **Data:** {r_series} Stats + Sim Racing/Esports presence (Digital Twin).
-- **Visual:** [IMAGE: Split screen: Real track action vs Sim/Digital representation.]
+**Slide 2: The Athlete**
+- **Content:** {s2_bio}
+- **Stats:** {s2_stats}
+- **Visual:** [IMAGE: Action shot on track.]
 
-**Slide 3: The Digital Frontier (Innovation)**
-- **Headline:** Beyond the Track
-- **Content:** "Engaging Gen Z/Alpha via Sim Racing, VR paddock tours, and 24/7 Social Content."
-- **Visual:** [IMAGE: VR headset POV or Social Media 'Live' interface mockup.]
+**Slide 3: Digital Frontier**
+- **Content:** {s3_content}
+- **Visual:** [IMAGE: VR headset POV or Sim Racing Setup.]
 
-**Slide 4: Sustainability Commitment (ESG)**
-- **Headline:** Racing Responsibly
-- **Content:** "Commitment to carbon-neutral travel, eco-friendly logistics, and promoting sustainable technology."
-- **Visual:** [IMAGE: Green-tinted action shot or 'Eco-Certified' graphic style.]
+**Slide 4: Sustainability**
+- **Content:** {s4_content}
+- **Visual:** [IMAGE: Green-tinted action shot or Eco-Badge.]
 
-**Slide 5: Audience Intelligence**
-- **Headline:** Data-Driven Reach
-- **Data:** {r_audience}. Highlight: Tech-savvy, High disposable income, Eco-conscious.
-- **Visual:** [CHART: Infographic showing audience demographics and purchasing power.]
+**Slide 5: Audience**
+- **Data:** {s5_data}
+- **Visual:** [CHART: Infographic of demographics.]
 
-**Slide 6: Strategic Alignment**
-- **Headline:** {prop_hook}
-- **Content:** Why {l_name} fits this future-ready platform.
-- **Visual:** [IMAGE: Product placement in a 'clean' high-tech garage environment.]
+**Slide 6: Alignment (The Why)**
+- **Content:** {s6_hook}
+- **Visual:** [IMAGE: Split screen: {r_name} Left | {l_name} Logo Right.]
 
-**Slide 7: Activation Matrix (Year-Round)**
-- **Headline:** 365 Days of Impact
-- **Content:**
-{prop_ideas}
-- **Visual:** [IMAGE: Calendar timeline graphic showing Q1-Q4 activation spikes.]
+**Slide 7: Activation Matrix**
+- **Plan:**
+{s7_ideas}
+- **Visual:** [IMAGE: Timeline graphic or Mockup of branding.]
 
-**Slide 8: The ROI Formula (Validation)**
-- **Headline:** Measurable Success
-- **Formula:** "Total Value = (Media Reach + Hospitality + Lead Gen) - Investment".
-- **Promise:** Quarterly detailed reports on Media Value & Engagement.
-- **Visual:** [IMAGE: Dashboard mockup showing graphs/analytics growing.]
+**Slide 8: ROI Formula**
+- **Method:** {s8_formula}
+- **Visual:** [IMAGE: Dashboard analytics mockup.]
 
-**Slide 9: Investment Tiers**
-- **Headline:** {prop_ask}
-- **Content:** Gold (Title), Silver (Major), Bronze (Partner). Focus on VALUE not cost.
-- **Visual:** [IMAGE: 3 Distinct 'Package' Icons or Cards.]
+**Slide 9: Investment**
+- **Package:** {s9_ask}
+- **Visual:** [IMAGE: Premium Package Icons.]
 
-**Slide 10: The Finish Line (Action)**
-- **Headline:** Join the 2026 Grid
-- **Call to Action:** "Let's build the future today."
-- **Contact:** {st.session_state.user_email}
-- **Visual:** [IMAGE: {r_name} looking ahead/upward, inspiring lighting.]
+**Slide 10: Next Steps**
+- **CTA:** {s10_cta}
+- **Visual:** [IMAGE: Inspiring looking-ahead shot.]
 """
-                        st.success("✨ '2026 Future-Ready' Strategy Generated!")
+                        st.success("✨ Strategy Generated!")
                         st.code(manus_prompt, language=None)
                         
                         st.divider()
-                        st.markdown("### 📧 Send to Team")
-                        st.caption("1. Click the 'Copy' icon above. 2. Click below to open email. 3. Paste.")
-                        
-                        subject = urllib.parse.quote(f"Manus Proposal Framework: {r_name} x {l_name}")
-                        mailto = f"mailto:team@caminocoaching.co.uk?subject={subject}&body=(Paste%20Manus%20Prompt%20Here)"
-                        st.link_button("📤 Open Email to team@caminocoaching.co.uk", mailto)
-                        
-                        st.caption("🚀 Or paste directly into https://manus.im/app")
+                        st.markdown("### 📧 Send")
+                        subject = urllib.parse.quote(f"Proposal: {r_name} x {l_name}")
+                        mailto = f"mailto:team@caminocoaching.co.uk?subject={subject}&body=(Paste%20Prompt)"
+                        st.link_button("📤 Open Email", mailto)
+                        st.caption("🚀 Or paste into https://manus.im/app")
 
     else:
         st.info("👈 Go to Dashboard or Search to select a lead.")
