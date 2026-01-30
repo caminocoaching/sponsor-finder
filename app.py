@@ -1562,64 +1562,81 @@ Supply a source URL for every data point. Do not guess emails."""
 
                 
             elif stage == "3. Proposal":
-                st.subheader(f"📝 Generate Proposal for {lead['Business Name']}")
+                st.subheader(f"📝 Proposal Creator for {lead['Business Name']}")
+                st.caption("Follow these 4 steps to build a 10/10 'Success-Focused 2026' Proposal.")
                 
-                # Logo Uploader
-                with st.expander("📸 Company Logo (Required for Slide 1)", expanded=True):
-                    st.caption(f"Please upload the **{lead['Business Name']}** logo. If you don't have it, go to {lead.get('Website', 'their website')}, take a screenshot, and upload it here.")
-                    logo_file = st.file_uploader("Upload Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-                    if logo_file:
-                        st.image(logo_file, width=150)
-                        st.success("Logo ready for deck!")
+                # --- STEP 1: DISCOVERY DATA ---
+                st.markdown("#### Step 1: Review Discovery Data")
+                l_notes = lead.get('Notes', {})
+                disc_context = "**Deep Discovery Findings (Client Voice):**\n"
+                has_answers = False
+                
+                with st.expander("View Discovery Answers", expanded=True):
+                    for i, question_text in enumerate(DISCOVERY_QUESTIONS):
+                        key = f"Q{i+1}"
+                        answer = l_notes.get(key, "").strip()
+                        if answer:
+                            has_answers = True
+                            st.write(f"**{question_text}**")
+                            st.info(f"Client: {answer}")
+                            disc_context += f"- **Issue/Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
+                        else:
+                            st.write(f"**{question_text}**")
+                            st.caption("❌ No answer logged.")
+                
+                if not has_answers:
+                     st.warning("⚠️ CRITICAL: You have no Discovery Data. The proposal will be generic. Go back to 'Discovery Call' to fix this.")
+                     disc_context += "(⚠️ NO DISCOVERY DATA LOGGED. PROPOSAL WILL LACK CONTEXT.)"
 
-                st.info("Fill in the specific gaps below. The app will combine this with your Profile & Research to write a full slide-deck prompt.")
+                st.divider()
+
+                # --- STEP 2: STRATEGY GAPS ---
+                st.markdown("#### Step 2: Strategic Gaps (The 2026 Edge)")
+                st.caption("We need your input to tailor the 'Hook', 'Activations', and 'Ask'.")
                 
-                # 1. GATHER GAPS
                 with st.form("proposal_gaps"):
-                    col_p1, col_p2 = st.columns(2)
+                    st.write("**For Slide 6 (Strategic Alignment):**")
+                    prop_hook = st.text_area("Why is this partnership a 'perfect fit' right now?", 
+                                           value=f"Because {lead['Business Name']} is targeting...",
+                                           help="The 'Hook'. Why them? Why you? Why 2026?", height=100)
                     
+                    st.write("**For Slide 7 (Activation Matrix):**")
+                    prop_ideas = st.text_area("List 3 Activation Ideas (What will you actually DO?)", 
+                                            value="1. VR Paddock Experience for VIPs.\n2. Co-branded Sustainability Content Series.\n3. 'Digital Twin' logo placement in Sim Racing.",
+                                            help="Think 2026: Esports, VR, Sustainability, Content.", height=100)
+                    
+                    col_p1, col_p2 = st.columns(2)
                     with col_p1:
-                        prop_hook = st.text_area("The 'Hook' (Why them?)", 
-                                               value=f"Given {lead['Business Name']}'s work in {lead.get('Sector', 'their sector')}, our audience matches their target market of...",
-                                               help="Specific reason why this partnership makes sense.", height=100)
-                        
-                        prop_ask = st.text_input("Proposed Investment / Level", value="Title Sponsor (£5,000)", help="Rough ballpark or package name")
-                        
+                         st.write("**For Slide 9 (The Ask):**")
+                         prop_ask = st.text_input("Proposed Tier / Investment", value="Gold Partner (£15,000)", help="Be specific.")
                     with col_p2:
-                        prop_ideas = st.text_area("3 Activation Ideas (What will we do?)", 
-                                                value="1. Branding on bike fairing.\n2. Social media product showcase video.\n3. VIP tickets for their clients.",
-                                                height=100)
-                        
-                        prop_tone = st.selectbox("Tone", ["Professional & Corporate", "Exciting & High Energy", "Personal & Story-Driven"])
+                         st.write("**Proposal Tone:**")
+                         prop_tone = st.selectbox("Tone", ["Future-Ready & Professional (Recommended)", "High Energy & Aggressive", "Personal & Story-Driven"])
 
-                    if st.form_submit_button("✨ Generate Manus Prompt"):
-                        # 2. CONSTRUCT PROMPT ("Winning Formula" - JK66 Style)
+                    # --- STEP 3: VISUALS ---
+                    st.divider()
+                    st.markdown("#### Step 3: Visual Polish")
+                    st.caption(f"We need the **{lead['Business Name']}** logo for Slide 1.")
+                    logo_file = st.file_uploader("Upload Logo (Screenshot from website)", type=["png", "jpg", "jpeg"])
+                    if logo_file:
+                        st.image(logo_file, width=100)
+                        st.caption("✅ Logo Attached")
+                    else:
+                        st.info(f"👉 Go to {lead.get('Website', 'their website')}, take a screenshot, and upload it.")
+
+                    st.divider()
+                    
+                    # --- STEP 4: GENERATE ---
+                    st.markdown("#### Step 4: Generate")
+                    if st.form_submit_button("✨ Create '2026 Future-Ready' Strategy"):
                         
                         # Data Mapping
                         r_name = st.session_state.user_name
                         r_series = championship
                         r_bio = st.session_state.user_profile.get('bio', f"A competitive racer in {r_series}")
                         r_audience = f"{st.session_state.user_profile.get('social_following', 'Growing')} Followers"
-                        
                         l_name = lead['Business Name']
-                        l_notes = lead.get('Notes', {})
-                        
-                        # Discovery Context (Formatted)
-                        disc_context = "**Deep Discovery Findings (Client Voice):**\n"
-                        has_answers = False
-                        
-                        # Map Q1..Q6 to text
-                        for i, question_text in enumerate(DISCOVERY_QUESTIONS):
-                            key = f"Q{i+1}"
-                            answer = l_notes.get(key, "").strip()
-                            if answer:
-                                has_answers = True
-                                disc_context += f"- **Issue/Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
-                        
-                        if not has_answers:
-                            disc_context += "(⚠️ NO DISCOVERY DATA LOGGED. This proposal will be generic. Go back to 'Discovery Call' to log answers.)"
-                            st.warning("⚠️ You haven't logged any Discovery Call answers. The proposal might lack specific client details.")
-                        
+
                         manus_prompt = f"""
 Create a cutting-edge "2026 Future-Ready" sponsorship deck for '{r_name}' pitching to '{l_name}'.
 **Framework:** 'Success-Focused 2026 Motorsport Sponsorship Manus Strategy'.
@@ -1688,20 +1705,18 @@ Create a cutting-edge "2026 Future-Ready" sponsorship deck for '{r_name}' pitchi
 - **Contact:** {st.session_state.user_email}
 - **Visual:** [IMAGE: {r_name} looking ahead/upward, inspiring lighting.]
 """
-                        st.success("✨ 'Winning Formula' Prompt Generated! (JK66 Style)")
+                        st.success("✨ '2026 Future-Ready' Strategy Generated!")
                         st.code(manus_prompt, language=None)
                         
                         st.divider()
                         st.markdown("### 📧 Send to Team")
-                        st.caption("1. Click the 'Copy' icon on the code block above.")
-                        st.caption("2. Click the button below to open your email.")
-                        st.caption("3. Paste the prompt into the email body.")
+                        st.caption("1. Click the 'Copy' icon above. 2. Click below to open email. 3. Paste.")
                         
                         subject = urllib.parse.quote(f"Manus Proposal Framework: {r_name} x {l_name}")
                         mailto = f"mailto:team@caminocoaching.co.uk?subject={subject}&body=(Paste%20Manus%20Prompt%20Here)"
                         st.link_button("📤 Open Email to team@caminocoaching.co.uk", mailto)
                         
-                        st.caption("🚀 Or go to https://manus.im/app and paste directly.")
+                        st.caption("🚀 Or paste directly into https://manus.im/app")
 
     else:
         st.info("👈 Go to Dashboard or Search to select a lead.")
