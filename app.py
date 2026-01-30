@@ -12,7 +12,7 @@ from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Sponsor Finder V2.1 (Debug)", page_icon="🏍️", layout="wide")
+st.set_page_config(page_title="Sponsor Finder V2.2", page_icon="🏍️", layout="wide")
 
 # Initialize DB
 db.init_db()

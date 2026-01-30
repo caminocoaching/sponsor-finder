@@ -193,7 +193,7 @@ def search_google_places(api_key, query, location, radius_miles):
                 data_next = resp_next.json()
                 
                 places = data_next.get("places", [])
-                st.info(f"📄 Fetching Page {current_page + 2}... Found {len(places)} more.") # Persistent Feedback
+                st.toast(f"📄 Page {current_page + 2}: Found {len(places)} more...", icon="🔎") 
                 process_places(places)
                 
                 next_token = data_next.get("nextPageToken")
@@ -203,12 +203,14 @@ def search_google_places(api_key, query, location, radius_miles):
                 st.error(f"❌ Search Page {current_page+2} failed: {e}")
                 break
         
-        # DEBUG:
+        # SUMMARY:
         total = len(results)
-        if total <= 20:
-            st.warning(f"⚠️ Search finished with {total} results. (API might be limiting pages or no more results).")
+        if total == 0:
+             st.warning("No results found. Try a wider radius or different sector.")
+        elif total <= 20:
+             st.info(f"✅ Search Complete. Found {total} targets.")
         else:
-            st.success(f"✅ Search Complete: Processed {current_page+1} pages. Total Found: {total}")
+             st.success(f"✅ Search Complete! Digging deep found {total} targets in your area.")
              
         return results
         
