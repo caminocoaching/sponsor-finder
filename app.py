@@ -1562,7 +1562,16 @@ Supply a source URL for every data point. Do not guess emails."""
 
                 
             elif stage == "3. Proposal":
-                st.subheader("📝 Generate 'Manus.im' Proposal Prompt")
+                st.subheader(f"📝 Generate Proposal for {lead['Business Name']}")
+                
+                # Logo Uploader
+                with st.expander("📸 Company Logo (Required for Slide 1)", expanded=True):
+                    st.caption(f"Please upload the **{lead['Business Name']}** logo. If you don't have it, go to {lead.get('Website', 'their website')}, take a screenshot, and upload it here.")
+                    logo_file = st.file_uploader("Upload Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+                    if logo_file:
+                        st.image(logo_file, width=150)
+                        st.success("Logo ready for deck!")
+
                 st.info("Fill in the specific gaps below. The app will combine this with your Profile & Research to write a full slide-deck prompt.")
                 
                 # 1. GATHER GAPS
