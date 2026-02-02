@@ -364,6 +364,41 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
                  .replace("[Audience Answer]", context_answers.get("Q2", "locals"))\
                  .replace("[Success Answer]", context_answers.get("Q5", "brand awareness"))
                  
+    
+    # [NEW] Representation/Parent Mode Logic
+    if extra_context.get("rep_mode"):
+        rep_name = extra_context.get("rep_name", "Manager")
+        rep_role = extra_context.get("rep_role", "Manager")
+        
+        # 1. Intro Override
+        # "My name is [Rider Name]" -> "My name is [Rep Name] and I am the [Role] of [Rider Name]"
+        target_intro = f"My name is {rider_name}"
+        new_intro = f"My name is {rep_name} and I am the {rep_role} of {rider_name}"
+        msg = msg.replace(target_intro, new_intro)
+        
+        # 2. Activity Pronoun Overrides
+        # List of phrases where "I" refers to the Rider performing the sport
+        substitutions = [
+            ("I am racing", f"{rider_name} is racing"),
+            ("I'm currently competing", f"{rider_name} is currently competing"),
+            ("I am currently competing", f"{rider_name} is currently competing"),
+            ("I’ve recently launched my", f"{rider_name} has recently launched their"),
+            ("my race helmet", f"{rider_name}'s race helmet"),
+            ("I believe we could", "We believe we could"),
+            ("expand my network", "expand our network"),
+            ("I’m focusing solely", f"{rider_name} is focusing solely"),
+            ("allowing me to", f"allowing {rider_name} to")
+        ]
+        
+        for old_phrase, new_phrase in substitutions:
+            msg = msg.replace(old_phrase, new_phrase)
+            
+        # 3. Signature Override
+        # Replace the signer (usually at the very end) from Rider Name to Rep Name
+        # We use rsplit to only replace the last occurrence to avoid breaking the text body if name is mentioned there
+        if msg.strip().endswith(rider_name):
+             msg = rep_name.join(msg.rsplit(rider_name, 1))
+
     return msg
 
 # --- UI LAYOUT ---
@@ -487,8 +522,29 @@ def onboarding_screen(user_data, is_edit_mode=False):
         tv_reach = st.text_input("Do you have viewing figures from the organizer? (e.g. 50k per round)", value=default_tv_reach, placeholder="Enter number or 'Unknown'")
     
     st.divider()
+
+    st.subheader("4. Representation (Parent / Manager Mode)")
+    st.caption("Enable this if you are a parent or manager managing this account for the rider.")
     
-    st.subheader("4. Database Setup")
+    # Defaults
+    def_rep_mode = profile.get("rep_mode", False)
+    def_rep_name = profile.get("rep_name", "")
+    def_rep_role = profile.get("rep_role", "Mother")
+    
+    is_rep = st.checkbox("I am managing this for the rider (enable text adjustments)", value=def_rep_mode)
+    
+    rep_name = ""
+    rep_role = "Mother"
+    
+    if is_rep:
+        r1, r2 = st.columns(2)
+        rep_name = r1.text_input("Your Name (The Sender)", value=def_rep_name, placeholder="e.g. Sally")
+        rep_role = r2.selectbox("Relationship to Rider", ["Mother", "Father", "Manager", "Agent", "Sponsor"], index=["Mother", "Father", "Manager", "Agent", "Sponsor"].index(def_rep_role) if def_rep_role in ["Mother", "Father", "Manager", "Agent", "Sponsor"] else 0)
+        st.info(f"Messages will read: 'My name is {rep_name} and I am the {rep_role} of {raw_name}...'")
+
+    st.divider()
+    
+    st.subheader("5. Database Setup")
     if airtable_manager.is_configured():
          st.success("✅ Central Database Connected")
     else:
@@ -524,7 +580,10 @@ def onboarding_screen(user_data, is_edit_mode=False):
                 "state": user_state,
                 "zip_code": user_zip,
                 "country": user_country, 
-                "onboarding_complete": True
+                "onboarding_complete": True,
+                "rep_mode": is_rep,
+                "rep_name": rep_name,
+                "rep_role": rep_role
             })
             
             db.save_user_profile(user_data['email'], full_name, profile_update)
@@ -1225,7 +1284,6 @@ if current_tab == "✉️ Outreach Assistant":
                 next_a = lead.get('Next Action', 'ASAP')
                 h2.metric("Last Contact", str(last_c))
                 h3.metric("Next Action", str(next_a))
-                h3.metric("Next Action", str(next_a))
 
         else:
              st.warning("You have no leads saved! Go to 'Search & Add' first.")
@@ -1430,15 +1488,17 @@ Supply a source URL for every data point. Do not guess emails."""
                     
 
                     
-                    # Manual Entry to DB
-                    new_name = st.text_input("Found Contact Name", value=lead['Contact Name'])
-                    if st.button("Update Contact"):
-                        # We would need a db update function for contact name specific fields, 
-                        # for now simplistic mock
-                        st.toast("Contact Saved (simulated)")
+
 
                 with col2:
-                    c_mode = st.radio("Action Mode", ["Draft Opener", "Handle Reply"], horizontal=True)
+                    # Top Controls: Action Mode + Contact Name Update
+                    top_c1, top_c2 = st.columns([1.2, 1])
+                    with top_c1:
+                         c_mode = st.radio("Action Mode", ["Draft Opener", "Handle Reply"], horizontal=True)
+                    with top_c2:
+                         new_name = st.text_input("Found Contact Name", value=lead['Contact Name'])
+                         if st.button("Update Contact"):
+                             st.toast("Contact Saved (simulated)")
                     
                     if c_mode == "Draft Opener":
                         st.subheader("Outreach Message")
@@ -1466,7 +1526,10 @@ Supply a source URL for every data point. Do not guess emails."""
                             "achievements": achievements,
                             "audience": audience_size,
                             "tv": tv_viewers,
-                            "team": team_name
+                            "team": team_name,
+                            "rep_mode": user_profile.get("rep_mode", False),
+                            "rep_name": user_profile.get("rep_name", ""),
+                            "rep_role": user_profile.get("rep_role", "")
                         }
                         
                         # Town extraction
