@@ -1177,7 +1177,14 @@ if current_tab == " Search & Add":
 
     st.divider()
 
-    st.subheader(f"Find {search_query} within {search_radius} miles of {location_search_ctx}")
+    # Format query for display
+    display_query = f"'{search_query}'"
+    if isinstance(search_query, list):
+        display_query = ", ".join([f"'{q}'" for q in search_query])
+        # Truncate if too long
+        if len(display_query) > 60: display_query = display_query[:60] + "..."
+
+    st.subheader(f"Find {display_query} within {search_radius} miles of {location_search_ctx}")
     
     # NEW SEARCH (Reset)
     if st.button("Run Search (Scout)", type="primary"):
