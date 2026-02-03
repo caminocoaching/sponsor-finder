@@ -328,6 +328,20 @@ def update_lead_notes(lead_id, notes_data):
     conn.commit()
     conn.close()
 
+def update_lead_contact(lead_id, contact_name):
+    if airtable_manager.is_configured():
+        return airtable_manager.update_lead_contact(lead_id, contact_name)
+
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.update_lead_contact(lead_id, contact_name)
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE leads SET contact_name=? WHERE id=?", (contact_name, lead_id))
+    conn.commit()
+    conn.close()
+    return True
+
 def delete_lead(lead_id):
     if airtable_manager.is_configured():
         return airtable_manager.delete_lead(lead_id)

@@ -211,6 +211,16 @@ class SheetManager:
         self.worksheet.update_cell(row_idx, 10, notes_json) # Col 10
         return True
 
+    def update_lead_contact(self, lead_id, contact_name):
+        try:
+            cell = self.worksheet.find(str(lead_id), in_column=1)
+        except gspread.exceptions.CellNotFound:
+            return False
+        
+        row_idx = cell.row
+        self.worksheet.update_cell(row_idx, 7, contact_name) # Col 7 is Contact Name
+        return True
+
     def delete_lead(self, lead_id):
         try:
             cell = self.worksheet.find(str(lead_id), in_column=1)

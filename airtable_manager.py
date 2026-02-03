@@ -21,8 +21,8 @@ class AirtableManager:
             "Website": "website",
             "Status": "status",
             "Last Contact": "last contact",
-            "Next Action": "next action"
-            # "Contact Name": "contact name", # Missing in Airtable
+            "Next Action": "next action",
+            "Contact Name": "contact name",
             # "Notes JSON": "notes json"      # Missing in Airtable
         }
         # Reverse map for fetching
@@ -310,6 +310,26 @@ class AirtableManager:
             return True
         except Exception as e:
             print(f"Airtable Notes Update Error: {e}")
+            return False 
+
+    def update_lead_contact(self, lead_id, contact_name):
+        """
+        Updates the Contact Name.
+        """
+        if not self.is_configured(): return False
+        
+        fields = {
+            self.FIELD_MAP["Contact Name"]: contact_name
+        }
+        
+        payload = {"records": [{"id": lead_id, "fields": fields}]}
+        
+        try:
+            response = requests.patch(self._get_url(), headers=self.headers, json=payload)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"Airtable Contact Update Error: {e}")
             return False 
 
     def delete_lead(self, lead_id):
