@@ -122,12 +122,22 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
                                     "Phone": item.get("phone", ""),
                                     "lat": item.get("latitude"),
                                     "lon": item.get("longitude"),
+                                    "place_id": item.get("place_id", item.get("google_id")),
                                     "Source": "Outscraper SDK"
                                 })
 
                 # [FILTER] Remove results outside the actual radius (since scatter boxes are square/loose)
                 filtered_results = []
+                seen_places = set()
+
                 for res in mapped_results:
+                    # Deduplication Key: Place ID if available, else Name + Lat/Lon
+                    dedup_key = res.get("place_id") or f"{res.get('Business Name')}_{res.get('lat')}_{res.get('lon')}"
+                    
+                    if dedup_key in seen_places:
+                        continue
+                    seen_places.add(dedup_key)
+
                     if res.get("lat") and res.get("lon"):
                         dist = haversine_distance(start_lat, start_lon, res["lat"], res["lon"])
                         if dist <= radius * 1.2: # Allow 20% margin for driving distance vs straight line
