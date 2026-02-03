@@ -754,19 +754,31 @@ with st.sidebar:
              
         # Outscraper Key Logic
         if "Outscraper" in search_provider:
-            # Check st.secrets first
+            # Check st.secrets first (Root level or inside airtable section by mistake)
             system_os_key = st.secrets.get("outscraper_api_key", "")
+            if not system_os_key and "airtable" in st.secrets:
+                 system_os_key = st.secrets["airtable"].get("outscraper_api_key", "")
             
-            if system_os_key:
+            # Use stored key if available
+            current_key = st.session_state.user_profile.get("outscraper_key", "")
+            
+            # If system key exists and we don't have a user key yet (or it matches), use system key
+            if system_os_key and (not current_key or current_key == system_os_key):
                  st.success("✅ Outscraper Key is managed by the system (Shared Key active).")
                  st.session_state.user_profile["outscraper_key"] = system_os_key 
+                 # Still show value for confirmation but disabled? Or just hidden?
+                 # User screenshot shows input. Let's make it consistent.
+                 # If managed, don't show input to avoid confusion, just the success message.
             else:
                 saved_os_key = st.session_state.user_profile.get("outscraper_key", "")
                 outscraper_key = st.text_input("Outscraper API Key", value=saved_os_key, type="password", help="Get from outscraper.com for bulk data.")
-                if outscraper_key != saved_os_key:
+                
+                if outscraper_key:
                      st.session_state.user_profile["outscraper_key"] = outscraper_key
-                     db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
-                     st.toast("Outscraper Key Saved!")
+                     # Auto-save validation
+                     if outscraper_key != saved_os_key:
+                        db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
+                        st.toast("Outscraper Key Saved!")
             
             st.warning("⚖️ Compliance Note: Use Outscraper to collect **Public Business Data** only (B2B). Avoid extracting private personal details to maintain GDPR/CCPA safety.", icon="🛡️")
              
