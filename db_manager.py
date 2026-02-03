@@ -55,6 +55,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Migration: Add value (revenue) if missing
+    try:
+        c.execute("ALTER TABLE leads ADD COLUMN value REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
     conn.close()
 
@@ -93,18 +99,11 @@ def get_user_by_email(email):
                     merged_profile[k] = v
             
             # Return combined object
-            # Prefer Airtable ID (string) if we want to write back to it, but app uses ID for local DB specific logic...
-            # Actually, app uses ID for simple checks. Let's return local ID if available to keep SQLite happy, 
-            # but maybe we need both. For now, let's stick to returning what matches the system.
-            # If we return at_user, ID is string. If we return local, ID is int.
-            
             # If we have local data, use local ID but merged profile
             if local_data:
                 local_data["profile"] = merged_profile
                 return local_data
             else:
-                # User exists in Airtable but not Locally? Sync down.
-                # (Ideally we should insert into local here)
                 return at_user
 
     return local_data
@@ -165,7 +164,7 @@ def save_user_profile(email, name, profile_data):
     conn.close()
     return user_id
 
-def add_lead(user_id, business_name, sector, location, website="", status="Pipeline", notes_json="{}", next_action_date=None, contact_name="", last_contact_date="Never"):
+def add_lead(user_id, business_name, sector, location, website="", status="Pipeline", notes_json="{}", next_action_date=None, contact_name="", last_contact_date="Never", value=0):
     # Priority: Airtable -> GSheets -> SQLite
     
     # 1. Airtable (Centralized)
@@ -189,7 +188,8 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
                 "Contact Name": contact_name,
                 "Last Contact": last_contact_date,
                 "Next Action": next_action_date,
-                "Notes": notes_dict
+                "Notes": notes_dict,
+                "Value": value
             }
              at_result = airtable_manager.add_lead(user["email"], data)
              if at_result:
@@ -218,7 +218,8 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
             "Contact Name": contact_name,
             "Last Contact": last_contact_date,
             "Next Action": next_action_date,
-            "Notes": notes_dict
+            "Notes": notes_dict,
+            "Value": value
         }
         return sheet_manager.add_lead(data)
 
@@ -240,9 +241,9 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
         next_action_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        c.execute('''INSERT INTO leads (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json))
+        c.execute('''INSERT INTO leads (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json, value)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (user_id, business_name, sector, location, website, status, contact_name, last_contact_date, next_action_date, notes_json, value))
         
         new_id = c.lastrowid
         conn.commit()
@@ -268,12 +269,18 @@ def get_leads(user_id):
     # Explicit Select to handle schema variations safely
     # Note: 'website' might obtain NULL if not filled, which is fine.
     try:
-        c.execute('''SELECT id, business_name, sector, location, status, contact_name, last_contact_date, next_action_date, notes_json, website 
+        c.execute('''SELECT id, business_name, sector, location, status, contact_name, last_contact_date, next_action_date, notes_json, website, value 
                      FROM leads WHERE user_id=? ORDER BY id DESC''', (user_id,))
     except sqlite3.OperationalError:
         # Fallback if website col doesn't exist (migration failed?)
-        c.execute('''SELECT id, business_name, sector, location, status, contact_name, last_contact_date, next_action_date, notes_json, "" 
-                     FROM leads WHERE user_id=? ORDER BY id DESC''', (user_id,))
+        try:
+             # Website exists but value doesnt
+             c.execute('''SELECT id, business_name, sector, location, status, contact_name, last_contact_date, next_action_date, notes_json, website, 0 
+                          FROM leads WHERE user_id=? ORDER BY id DESC''', (user_id,))
+        except:
+             # neither exists
+             c.execute('''SELECT id, business_name, sector, location, status, contact_name, last_contact_date, next_action_date, notes_json, "", 0 
+                          FROM leads WHERE user_id=? ORDER BY id DESC''', (user_id,))
         
     rows = c.fetchall()
     conn.close()
@@ -281,6 +288,7 @@ def get_leads(user_id):
     leads = []
     for r in rows:
         website_val = r[9] if r[9] else ""
+        value_val = r[10] if len(r) > 10 and r[10] else 0
         
         leads.append({
             "id": r[0],
@@ -292,7 +300,8 @@ def get_leads(user_id):
             "Last Contact": r[6],
             "Next Action": r[7],
             "Notes": json.loads(r[8]) if r[8] else {},
-            "Website": website_val
+            "Website": website_val,
+            "Value": value_val
         })
     return leads
 
@@ -338,6 +347,20 @@ def update_lead_contact(lead_id, contact_name):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("UPDATE leads SET contact_name=? WHERE id=?", (contact_name, lead_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def update_lead_value(lead_id, value):
+    if airtable_manager.is_configured():
+        return airtable_manager.update_lead_value(lead_id, value)
+
+    if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
+        return sheet_manager.update_lead_value(lead_id, value)
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE leads SET value=? WHERE id=?", (value, lead_id))
     conn.commit()
     conn.close()
     return True

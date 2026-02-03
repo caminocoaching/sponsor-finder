@@ -2,7 +2,101 @@ import requests
 import math
 import time
 import random
+import json
+import urllib.parse
 import streamlit as st # Added for debug feedback
+from outscraper import OutscraperClient # [NEW] Use official SDK
+
+def search_outscraper(api_key, query, location_str, radius=50, limit=100):
+    """
+    Uses Outscraper SDK to find businesses. Best for comprehensive lists.
+    """
+    try:
+        st.toast(f"Outscraper SDK: Contacting ({query})...", icon="📡")
+        
+        client = OutscraperClient(api_key=api_key)
+        
+        # Outscraper SDK expects query as list or string
+        # We combine query + location logic somewhat, but for maps search
+        # the 'query' param in SDK is the main search term.
+        # It handles "Transport near Banbury" well if we form it that way.
+        
+        # Construct query with location to be safe
+        search_term = f"{query} near {location_str}"
+        
+        # SDK Call
+        # limit per query
+        results = client.google_maps_search(
+            [search_term], 
+            limit=limit,
+            drop_duplicates=True,
+            language='en'
+        )
+        
+        # Results is a list of lists (one per query)
+        # results = [[{...}, {...}]]
+        
+        mapped_results = []
+        if results and len(results) > 0:
+            batch = results[0] # Results for first query
+            for item in batch:
+                mapped_results.append({
+                    "Business Name": item.get("name", "Unknown"),
+                    "Address": item.get("full_address", item.get("address", "")),
+                    "Rating": item.get("rating", 0.0),
+                    "Sector": item.get("category", item.get("type", "Search Result")),
+                    "Website": item.get("site", ""),
+                    "Phone": item.get("phone", ""),
+                    "lat": item.get("latitude"),
+                    "lon": item.get("longitude"),
+                    "Source": "Outscraper SDK"
+                })
+                
+        return mapped_results, None
+
+    except Exception as e:
+        return {"error": f"Outscraper SDK Error: {str(e)}"}, None
+
+def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
+    """
+    Uses the Legacy Nearby Search API which often returns more results 
+    using 'keyword' matching rather than 'text' intent matching.
+    """
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    
+    radius_meters = int(radius_miles * 1609.34)
+    
+    params = {
+        "location": f"{lat},{lon}",
+        "radius": radius_meters,
+        "keyword": keyword,
+        "key": api_key
+    }
+    
+    try:
+        resp = requests.get(url, params=params)
+        data = resp.json()
+        
+        if data.get("status") not in ["OK", "ZERO_RESULTS"]:
+             return {"error": data.get("error_message", data.get("status"))}, None
+             
+        results = []
+        for place in data.get("results", []):
+             results.append({
+                "Business Name": place.get("name"),
+                "Address": place.get("vicinity"),
+                "Rating": place.get("rating", 0.0),
+                "Sector": keyword,
+                "Website": "", # Legacy search doesn't return website in list view usually, needs detail fetch. Ignored for speed.
+                "lat": place["geometry"]["location"]["lat"],
+                "lon": place["geometry"]["location"]["lng"],
+                "Source": "Google Nearby"
+            })
+            
+        return results, data.get("next_page_token")
+        
+    except Exception as e:
+        return {"error": str(e)}, None
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
@@ -111,14 +205,31 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         # ACTUALLY: The standard pattern is just pageToken in body.
     else:
         # Geocode center only for first request
-        # We can implement get_lat_lon helper inside here or reuse checks
-        # For simplicity, let's assume location_ctx works or use textQuery bias
+        lat, lon = get_lat_long(api_key, location_ctx)
+        
         payload = {
-            "textQuery": f"{query} near {location_ctx}",
-            "openNow": False
+            "textQuery": query,
+            "maxResultCount": 20
         }
-        # Try to add circular bias if radius is small
-        # (Omitting complex geocoding logic for brevity/reliability in this patch, trusting textQuery 'near' works well)
+        
+        if lat and lon:
+            # Convert miles to meters
+            radius_meters = int(radius_miles * 1609.34)
+            payload["locationBias"] = {
+                "circle": {
+                    "center": {"latitude": lat, "longitude": lon},
+                    "radius": radius_meters
+                }
+            }
+            # Also append location to query for good measure if bias is weak
+            # [OPTIMIZED] Use natural language phrasing that matches Google Maps Web behavior
+            # "Transport & haulage within 50 miles of Middleton Cheney" works better than "near"
+            payload["textQuery"] = f"{query} within {radius_miles} miles of {location_ctx}"
+        else:
+             # Fallback if geocode fails
+             payload["textQuery"] = f"{query} within {radius_miles} miles of {location_ctx}"
+             
+        # openNow: False - Removed to see all businesses (even closed ones)
         
     
     current_results = []

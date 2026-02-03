@@ -23,10 +23,13 @@ class AirtableManager:
             "Last Contact": "last contact",
             "Next Action": "next action",
             "Contact Name": "contact name",
+            "Value": "revenue",
             # "Notes JSON": "notes json"      # Missing in Airtable
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
+
+
 
     def setup_from_secrets(self):
         """Attempts to load configuration from st.secrets."""
@@ -180,7 +183,8 @@ class AirtableManager:
                     "Contact Name": get_f("Contact Name"),
                     "Last Contact": get_f("Last Contact", "Never"),
                     "Next Action": get_f("Next Action"),
-                    "Notes": notes
+                    "Notes": notes,
+                    "Value": get_f("Value", 0)
                 })
             return leads
 
@@ -227,7 +231,8 @@ class AirtableManager:
             ("Contact Name", lead_data.get("Contact Name", "")),
             ("Last Contact", lc),
             ("Next Action", lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d"))),
-            ("Notes JSON", notes_str)
+            ("Notes JSON", notes_str),
+            ("Value", lead_data.get("Value", 0))
         ]
         
         for app_key, val in mappings:
@@ -330,6 +335,26 @@ class AirtableManager:
             return True
         except Exception as e:
             print(f"Airtable Contact Update Error: {e}")
+            return False 
+
+    def update_lead_value(self, lead_id, value):
+        """
+        Updates the Revenue/Value field.
+        """
+        if not self.is_configured(): return False
+        
+        fields = {
+            self.FIELD_MAP["Value"]: value
+        }
+        
+        payload = {"records": [{"id": lead_id, "fields": fields}]}
+        
+        try:
+            response = requests.patch(self._get_url(), headers=self.headers, json=payload)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"Airtable Value Update Error: {e}")
             return False 
 
     def delete_lead(self, lead_id):

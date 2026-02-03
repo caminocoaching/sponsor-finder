@@ -6,3 +6,5 @@ google-auth
 streamlit-calendar
 pdfplumber
 playwright
+
+outscraper

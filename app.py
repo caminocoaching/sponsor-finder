@@ -7,7 +7,7 @@ import urllib.parse
 import db_manager as db
 import facebook_finder as fb_finder
 import json
-from search_service import mock_search_places, search_google_places
+from search_service import mock_search_places, search_google_places, search_google_legacy_nearby
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
@@ -30,7 +30,7 @@ SECTORS = [
     "Building supplies",
     "Food & beverage brands",
     "Tech & telecoms (optional)",
-    "Insurance",
+    "Insurance companies",
     "Financial services",
     "App developers",
     "Logistics",
@@ -51,6 +51,23 @@ SECTOR_HOOKS = {
     "Insurance": "protection and peace of mind at high speed",
     "Tech": "innovation and data-driven performance",
     "Other": "excellence and high performance"
+}
+
+# [NEW] Optimized Search Queries for Google Places API
+# Maps the user-friendly dropdown name to a LIST of terms to search in parallel
+SECTOR_SEARCH_OPTIMIZATIONS = {
+    "Transport & haulage": ["Haulage companies", "Transport services", "Logistics company", "Freight forwarding"],
+    "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
+    "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
+    "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
+    "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
+    "Building supplies": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction supply"],
+    "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food"],
+    "Insurance companies": ["Insurance Agency", "Insurance Broker", "Commercial Insurance"], 
+    "Financial services": ["Financial Consultant", "Investment service", "Wealth management"],
+    "Logistics": ["Logistics service", "Courier service", "Warehousing"],
+    "Printers": ["Commercial Printer", "Print shop", "Sign maker"],
+    "High Net Worth companies": ["Investment Bank", "Private Equity", "Asset Management"],
 }
 
 DISCOVERY_QUESTIONS = [
@@ -698,7 +715,8 @@ with st.sidebar:
         if selected_sector == "Other (type your own)":
             search_query = st.text_input("Enter key words")
         else:
-            search_query = selected_sector
+            # Use optimized query if available, else default to sector name
+            search_query = SECTOR_SEARCH_OPTIMIZATIONS.get(selected_sector, selected_sector)
     else:
         # COMPANY SCOUT MODE
         st.info("🎯 Enter specific details to analyze a target.")
@@ -709,6 +727,10 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("---")
     with st.expander("⚙️ Settings (Premium Features)"):
+        # Provider Selection
+        search_provider = st.radio("Search Engine", ["Google Places (Smart)", "Google Places (Legacy Proximity)", "Outscraper (Bulk Data)"], index=0, help="Smart = Best for specific intent. Legacy = Best for raw count. Outscraper = Best for comprehensive lists.")
+        st.session_state.search_provider = search_provider
+        
         # Load saved key
         # Check st.secrets first (System Managed)
         system_key = st.secrets.get("google_api_key", "")
@@ -728,6 +750,26 @@ with st.sidebar:
                  st.toast("API Key Saved! It is now locked in.")
             
              st.caption("Enter your key once to unlock Real Search for all future sessions.")
+             
+        # Outscraper Key Logic
+        if "Outscraper" in search_provider:
+            # Check st.secrets first
+            system_os_key = st.secrets.get("outscraper_api_key", "")
+            
+            if system_os_key:
+                 st.success("✅ Outscraper Key is managed by the system (Shared Key active).")
+                 st.session_state.user_profile["outscraper_key"] = system_os_key 
+            else:
+                saved_os_key = st.session_state.user_profile.get("outscraper_key", "")
+                outscraper_key = st.text_input("Outscraper API Key", value=saved_os_key, type="password", help="Get from outscraper.com for bulk data.")
+                if outscraper_key != saved_os_key:
+                     st.session_state.user_profile["outscraper_key"] = outscraper_key
+                     db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
+                     st.toast("Outscraper Key Saved!")
+            
+            st.warning("⚖️ Compliance Note: Use Outscraper to collect **Public Business Data** only (B2B). Avoid extracting private personal details to maintain GDPR/CCPA safety.", icon="🛡️")
+             
+
     
     if airtable_manager.is_configured():
         st.success("✅ Connected to Central Database (Airtable)")
@@ -841,6 +883,17 @@ if current_tab == "📊 Active Campaign":
         num_active = len(df_leads[df_leads['Status'] == 'Active'])
         num_secured = len(df_leads[df_leads['Status'] == 'Secured'])
         
+        # Calculate Revenue
+        # Ensure Value col is numeric
+        df_leads['Value'] = pd.to_numeric(df_leads.get('Value', 0), errors='coerce').fillna(0)
+        total_revenue = df_leads[df_leads['Status'] == 'Secured']['Value'].sum()
+        
+        # Display Revenue Top Level
+        r1, r2 = st.columns([3, 1])
+        r1.metric("💰 Total Secured Revenue", f"£{total_revenue:,.2f}")
+        
+        st.divider()
+
         # 2. QUICK FILTERS
         # Initialize filter state
         if 'dashboard_filter' not in st.session_state:
@@ -1118,21 +1171,128 @@ if current_tab == " Search & Add":
              st.error("Please enter a Company Name to scout.")
         else:
             with st.spinner("Scanning Page 1..."):
-                if google_api_key:
-                    # REAL SEARCH - Page 1
-                    sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
-                    results, next_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg)
-                    
-                    if isinstance(results, dict) and "error" in results:
-                        st.error(f"Google API Error: {results['error']}")
+                # [NEW] Multi-Keyword Support
+                sector_arg = selected_sector if search_mode == "Sector Search" else "Target Company"
+                queries = search_query if isinstance(search_query, list) else [search_query]
+
+                # DETERMINE PROVIDER
+                provider = st.session_state.get("search_provider", "Google Places (Smart)")
+                
+                # --- OUTSCRAPER ---
+                if "Outscraper" in provider:
+                    os_key = st.session_state.user_profile.get("outscraper_key")
+                    if not os_key:
+                        st.error("⚠️ Outscraper API Key missing. Please go to Settings (left sidebar) and add it.")
                     else:
-                        st.session_state.leads = pd.DataFrame(results)
-                        st.session_state.next_page_token = next_token
+                        # Outscraper uses single query string usually, or we loop.
+                        # Since it's bulk, one query "Transport & haulage" is usually enough
+                        q_str = queries[0] if isinstance(queries, list) else queries
                         
-                        if not results:
-                             st.warning("No results found.")
+                        # Location needs to be full string
+                        full_loc = f"{location_search_ctx}"
+                        
+                        # Use User's Radius + High Limit
+                        results, _ = search_outscraper(os_key, q_str, full_loc, radius=search_radius, limit=200)
+                        
+                        if isinstance(results, dict) and "error" in results:
+                             st.error(results['error'])
                         else:
-                             st.success(f"Found {len(results)} targets on Page 1.")
+                             st.session_state.leads = pd.DataFrame(results)
+                             st.session_state.next_page_token = None # No token for Outscraper here
+                             if results:
+                                 st.success(f"Outscraper found {len(results)} results!")
+                             else:
+                                 st.warning("Outscraper found 0 results.")
+                
+                # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
+                elif "Legacy" in provider and google_api_key:
+                    # Legacy uses 'keyword' and 'rankby=distance'. 
+                    # It ignores radius in strict sense, but we can filter later or just accept nice local list.
+                    
+                    combined_results = []
+                    
+                    # Get Lat/Lon once
+                    from search_service import get_lat_long
+                    lat, lon = get_lat_long(google_api_key, location_search_ctx)
+                    
+                    if not lat:
+                        st.error("Could not geocode location for Legacy Search.")
+                    else:
+                        # Legacy search limits: expensive to loop too much.
+                        # Just take top 2 keywords if list
+                        use_queries = queries[:2] if isinstance(queries, list) else [queries]
+                        
+                        for q in use_queries:
+                             st.caption(f"Proximity Search: '{q}'...")
+                             res, _ = search_google_legacy_nearby(google_api_key, q, lat, lon, search_radius)
+                             if isinstance(res, list):
+                                 combined_results.extend(res)
+                        
+                        # Dedupe and set
+                        if combined_results:
+                             temp_df = pd.DataFrame(combined_results)
+                             temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
+                             st.session_state.leads = temp_df
+                             st.session_state.next_page_token = None
+                             st.success(f"Proximity Search found {len(temp_df)} unique results.")
+                        else:
+                             st.warning("No results found.")
+
+                
+                # --- GOOGLE PLACES (SMART / TEXT) ---
+                elif google_api_key:
+                    # REAL SEARCH - Page 1
+                    sector_arg = selected_sector if search_mode == "Sector Search" else "Target Company"
+                    
+                    # [NEW] Multi-Keyword Support
+                    queries = search_query if isinstance(search_query, list) else [search_query]
+                    
+                    combined_results = []
+                    last_token = None
+                    
+                    progress_text = st.empty()
+                    
+                    for i, q in enumerate(queries):
+                        progress_text.caption(f"Searching for '{q}' ({i+1}/{len(queries)})...")
+                        
+                        # Use specific sector name if we have one, else just the query
+                        res, tok = search_google_places(google_api_key, q, location_search_ctx, search_radius, sector_name=sector_arg)
+                        
+                        if isinstance(res, dict) and "error" in res:
+                            st.warning(f"Error for '{q}': {res['error']}")
+                            continue
+                            
+                        combined_results.extend(res)
+                        # We only keep the token for the LAST query for now usually, 
+                        # or we disable deep search for multi-query because it gets complex.
+                        # For simplicity: One deep search token or None.
+                        last_token = tok 
+
+                    progress_text.empty()
+                    
+                    if not combined_results:
+                         st.warning("No results found.")
+                         st.session_state.leads = pd.DataFrame()
+                         st.session_state.next_page_token = None
+                    else:
+                         # Deduplicate by Name
+                         # Create DF first for easier drop_duplicates
+                         temp_df = pd.DataFrame(combined_results)
+                         if not temp_df.empty:
+                             before = len(temp_df)
+                             temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
+                             after = len(temp_df)
+                             
+                             st.session_state.leads = temp_df
+                             # If we ran multiple queries, setting a single next_page_token is tricky 
+                             # because it only applies to one. We'll disable it for Multi-Search for now to avoid confusion.
+                             # Or just keep the last one.
+                             st.session_state.next_page_token = None if len(queries) > 1 else last_token
+                             
+                             st.success(f"Found {after} unique targets! (Merged {len(queries)} searches)")
+                         else:
+                             st.session_state.leads = pd.DataFrame()
+                             st.session_state.next_page_token = None
                              
                 else:
                     # MOCK SEARCH (unchanged)
@@ -1144,22 +1304,32 @@ if current_tab == " Search & Add":
 
     # LOAD MORE BUTTON
     if st.session_state.get("next_page_token"):
-        if st.button("⬇️ Load Next 20 Results"):
+        if st.button("⬇️ Deeper Search (Next 20 Results)"):
              with st.spinner("Fetching next page..."):
                  token = st.session_state.next_page_token
                  sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
                  new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg, pagetoken=token)
                  
-                 if new_results:
+                 if isinstance(new_results, dict) and "error" in new_results:
+                     st.error(f"Google API Error: {new_results['error']}")
+                     # Do not update token so user can retry? Or clear it?
+                     # Usually token is single-use, but if error was transient...
+                     # Google tokens usually expire if used.
+                     # Let's keep the token for a retry if it was a network error, but if it was Invalid Argument, it is dead.
+                 elif new_results:
                      # Append to existing DataFrame
                      new_df = pd.DataFrame(new_results)
                      st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
                      st.success(f"Added {len(new_results)} more! Total: {len(st.session_state.leads)}")
-                 
-                 st.session_state.next_page_token = new_token # Update token (or None if done)
-                 if not new_token:
-                     st.info("✅ All pages loaded.")
-                 st.rerun()
+                     
+                     st.session_state.next_page_token = new_token # Update token (or None if done)
+                     if not new_token:
+                         st.info("✅ All pages loaded.")
+                     st.rerun()
+                 else:
+                     st.warning("No more results found.")
+                     st.session_state.next_page_token = None
+                     st.rerun()
 
     # Post-Processing: Check for Duplicates (Run always if leads exist)
     if not st.session_state.leads.empty:
@@ -1277,13 +1447,35 @@ if current_tab == "✉️ Outreach Assistant":
             if lead:
                 st.divider() 
                 # Header Stats
-                h1, h2, h3 = st.columns(3)
+                h1, h2, h3, h4 = st.columns(4)
                 h1.metric("Status", lead['Status'])
+                
                 # Handle missing or string values
                 last_c = lead.get('Last Contact', 'Never')
                 next_a = lead.get('Next Action', 'ASAP')
                 h2.metric("Last Contact", str(last_c))
                 h3.metric("Next Action", str(next_a))
+                
+                # Revenue / Value Logic
+                revenue_val = lead.get("Value", 0.0)
+                try:
+                    revenue_val = float(revenue_val)
+                except:
+                    revenue_val = 0.0
+                    
+                if lead['Status'] == "Secured":
+                    # Editable Field
+                    with h4:
+                        new_rev = st.number_input("Secured Revenue (£)", value=revenue_val, min_value=0.0, step=100.0)
+                        if new_rev != revenue_val:
+                            if st.button("Save Rev"):
+                                db.update_lead_value(lead['id'], new_rev)
+                                st.toast("Revenue Updated!")
+                                time.sleep(0.5)
+                                st.rerun()
+                else:
+                    # Static Display
+                    h4.metric("Potential Value", f"£{revenue_val:,.2f}")
 
         else:
              st.warning("You have no leads saved! Go to 'Search & Add' first.")

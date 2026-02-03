@@ -38,7 +38,7 @@ class SheetManager:
         """Check if headers exist, if not create them."""
         expected_headers = [
             "ID", "Business Name", "Sector", "Address", "Website", 
-            "Status", "Contact Name", "Last Contact", "Next Action", "Notes JSON"
+            "Status", "Contact Name", "Last Contact", "Next Action", "Notes JSON", "Value"
         ]
         
         current_headers = self.worksheet.row_values(1)
@@ -85,7 +85,8 @@ class SheetManager:
                 "Contact Name": r.get("Contact Name"),
                 "Last Contact": r.get("Last Contact"),
                 "Next Action": r.get("Next Action"),
-                "Notes": notes
+                "Notes": notes,
+                "Value": r.get("Value", 0)
             })
         return leads
 
@@ -167,7 +168,8 @@ class SheetManager:
             lead_data.get("Contact Name", ""),
             lead_data.get("Last Contact", "Never"),
             lead_data.get("Next Action", datetime.now().strftime("%Y-%m-%d")),
-            json.dumps(lead_data.get("Notes", {}))
+            json.dumps(lead_data.get("Notes", {})),
+            lead_data.get("Value", 0)
         ]
         
         try:
@@ -219,6 +221,16 @@ class SheetManager:
         
         row_idx = cell.row
         self.worksheet.update_cell(row_idx, 7, contact_name) # Col 7 is Contact Name
+        return True
+
+    def update_lead_value(self, lead_id, value):
+        try:
+            cell = self.worksheet.find(str(lead_id), in_column=1)
+        except gspread.exceptions.CellNotFound:
+            return False
+        
+        row_idx = cell.row
+        self.worksheet.update_cell(row_idx, 11, value) # Col 11 is Value
         return True
 
     def delete_lead(self, lead_id):
