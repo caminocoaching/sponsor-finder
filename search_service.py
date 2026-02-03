@@ -7,7 +7,7 @@ import urllib.parse
 import streamlit as st # Added for debug feedback
 from outscraper import OutscraperClient # [NEW] Use official SDK
 
-def search_outscraper(api_key, query, location_str, radius=50, limit=100):
+def search_outscraper(api_key, query, location_str, radius=50, limit=100, google_api_key=None):
     """
     Uses Outscraper SDK to find businesses. Best for comprehensive lists.
     """
@@ -16,46 +16,196 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100):
         
         client = OutscraperClient(api_key=api_key)
         
-        # Outscraper SDK expects query as list or string
-        # We combine query + location logic somewhat, but for maps search
-        # the 'query' param in SDK is the main search term.
-        # It handles "Transport near Banbury" well if we form it that way.
+        # 1. Try to resolve coordinates if Google Key is present
+        coords_param = None
+        zoom_level = 10 # Default for ~50 miles
         
-        # Construct query with location to be safe
-        search_term = f"{query} near {location_str}"
+        if google_api_key:
+             lat, lon = get_lat_long(google_api_key, location_str)
+             if lat and lon:
+                 # Calculate Zoom based on Radius (Approximate)
+                 # 14 = street, 10 = city, 7 = region
+                 if radius <= 5: zoom_level = 13
+                 elif radius <= 10: zoom_level = 12
+                 elif radius <= 25: zoom_level = 11
+                 elif radius <= 50: zoom_level = 10
+                 elif radius <= 100: zoom_level = 9
+                 elif radius <= 200: zoom_level = 8
+                 else: zoom_level = 7
+                 
+                 # Outscraper supports implied zoom in coordinates sometimes, or we try the comma format
+                 # But standard Google Maps URL param is @lat,lon,zoomz
+                 # Let's try the specific format that defines viewport:
+                 coords_param = f"@{lat},{lon},{zoom_level}z"
         
-        # SDK Call
-        # limit per query
+        # 2. Construct Query List (Scatter Strategy for Large Value)
+        # Detailed "Viewport" searches often fail to return ALL results (Google cap).
+        # We split the search into 5 overlapping sub-queries if radius is large (>50 miles).
+        
+        search_query_list = []
+        
+        # [CRITICAL] Enable Scatter for anything > 20 miles to ensure accuracy via Distance Filtering
+        if radius > 20 and google_api_key:
+            # [CRITICAL UPDATE] Explicit Coordinate Scatter
+            # Text queries ("North of...") are often ignored by Google Maps if the viewport is sticky.
+            # We must calculate precise Lat/Lon for each region and fire separate API calls.
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            # Get Center Coords
+            start_lat, start_lon = get_lat_long(google_api_key, location_str)
+            
+            if start_lat and start_lon:
+                mapped_results = []
+                
+                # Push out 70% of radius
+                dist_miles = float(radius) * 0.7
+                
+                # Force "Local Detail" zoom (Level 11 ~ City View) regardless of total area size
+                # This prevents Google from just showing "National Highlights"
+                scatter_zoom = 11
+                
+                # Calculate Base 5 points: Center, N, S, E, W
+                points = [
+                    (start_lat, start_lon, "Center"),
+                    get_new_coords(start_lat, start_lon, dist_miles, 0),   # North
+                    get_new_coords(start_lat, start_lon, dist_miles, 180), # South
+                    get_new_coords(start_lat, start_lon, dist_miles, 90),  # East
+                    get_new_coords(start_lat, start_lon, dist_miles, 270)  # West
+                ]
+                
+                # [Optimization] For MASSIVE areas (>100 miles), add diagonals to fill gaps
+                if radius > 100:
+                    st.toast(f"Massive Search: Scanning 9 sub-regions ({radius} miles)...", icon="🌌")
+                    points.append(get_new_coords(start_lat, start_lon, dist_miles, 45))  # NE
+                    points.append(get_new_coords(start_lat, start_lon, dist_miles, 135)) # SE
+                    points.append(get_new_coords(start_lat, start_lon, dist_miles, 225)) # SW
+                    points.append(get_new_coords(start_lat, start_lon, dist_miles, 315)) # NW
+                else:
+                    st.toast(f"Wide Search: Scanning 5 sub-regions ({radius} miles)...", icon="🛰️")
+                
+                # [PERFORMANCE] Use Threads to fire all 5-9 requests in parallel
+                # This reduces wait time from ~45s to ~5s
+                
+                def fetch_region(pt):
+                     lat, lon, label = pt
+                     coords_str = f"{lat},{lon},{scatter_zoom}z"
+                     try:
+                         return client.google_maps_search(
+                            [query], 
+                            limit=limit,
+                            drop_duplicates=False,
+                            language='en',
+                            coordinates=coords_str
+                        )
+                     except Exception as e:
+                         print(f"Region {label} failed: {e}")
+                         return []
+
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = [executor.submit(fetch_region, pt) for pt in points]
+                    
+                    for future in as_completed(futures):
+                        sub_res = future.result()
+                        
+                        # Process sub-results
+                        if sub_res and len(sub_res) > 0:
+                            # Handling structure
+                            batch = sub_res[0] if isinstance(sub_res[0], list) else sub_res
+                            
+                            for item in batch:
+                                mapped_results.append({
+                                    "Business Name": item.get("name", "Unknown"),
+                                    "Address": item.get("full_address", item.get("address", "")),
+                                    "Rating": item.get("rating", 0.0),
+                                    "Sector": item.get("category", item.get("type", "Search Result")),
+                                    "Website": item.get("site", ""),
+                                    "Phone": item.get("phone", ""),
+                                    "lat": item.get("latitude"),
+                                    "lon": item.get("longitude"),
+                                    "Source": "Outscraper SDK"
+                                })
+
+                # [FILTER] Remove results outside the actual radius (since scatter boxes are square/loose)
+                filtered_results = []
+                for res in mapped_results:
+                    if res.get("lat") and res.get("lon"):
+                        dist = haversine_distance(start_lat, start_lon, res["lat"], res["lon"])
+                        if dist <= radius * 1.2: # Allow 20% margin for driving distance vs straight line
+                             res["Distance"] = round(dist, 1)
+                             filtered_results.append(res)
+                
+                return filtered_results, None
+                
+        # [FALLBACK] Standard single search if small radius OR no Google Key for maths
+        search_query_list = []
+        
+        # If no coords available for logic above but strict radius needed:
+        if radius > 50 and not google_api_key:
+             # Try the text-based scatter (less reliable but better than nothing)
+             offset = int(radius * 0.7)
+             search_query_list.append(f"{query} near {location_str}")
+             search_query_list.append(f"{query} {offset} miles North of {location_str}")
+             search_query_list.append(f"{query} {offset} miles South of {location_str}")
+             search_query_list.append(f"{query} {offset} miles East of {location_str}")
+             search_query_list.append(f"{query} {offset} miles West of {location_str}")
+             coords_param = None
+        else:
+             search_query_list.append(f"{query} near {location_str}")
+
+        
+        # 3. SDK Call (Standard Mode)
         results = client.google_maps_search(
-            [search_term], 
+            search_query_list,
             limit=limit,
-            drop_duplicates=True,
-            language='en'
+            drop_duplicates=False,
+            language='en',
+            coordinates=coords_param
         )
         
         # Results is a list of lists (one per query)
-        # results = [[{...}, {...}]]
-        
         mapped_results = []
-        if results and len(results) > 0:
-            batch = results[0] # Results for first query
-            for item in batch:
-                mapped_results.append({
-                    "Business Name": item.get("name", "Unknown"),
-                    "Address": item.get("full_address", item.get("address", "")),
-                    "Rating": item.get("rating", 0.0),
-                    "Sector": item.get("category", item.get("type", "Search Result")),
-                    "Website": item.get("site", ""),
-                    "Phone": item.get("phone", ""),
-                    "lat": item.get("latitude"),
-                    "lon": item.get("longitude"),
-                    "Source": "Outscraper SDK"
-                })
+        
+        if results:
+            # Normalize structure: Ensure we have a list of lists
+            batches = results
+            if len(results) > 0 and isinstance(results[0], dict):
+                batches = [results]
+                
+            for batch in batches:
+                if isinstance(batch, list):
+                    for item in batch:
+                        mapped_results.append({
+                            "Business Name": item.get("name", "Unknown"),
+                            "Address": item.get("full_address", item.get("address", "")),
+                            "Rating": item.get("rating", 0.0),
+                            "Sector": item.get("category", item.get("type", "Search Result")),
+                            "Website": item.get("site", ""),
+                            "Phone": item.get("phone", ""),
+                            "lat": item.get("latitude"),
+                            "lon": item.get("longitude"),
+                            "Source": "Outscraper SDK"
+                        })
                 
         return mapped_results, None
 
     except Exception as e:
         return {"error": f"Outscraper SDK Error: {str(e)}"}, None
+
+def get_new_coords(lat, lon, miles, bearing_degrees):
+    """
+    Calculates new Lat/Lon given a starting point, distance (miles), and bearing.
+    """
+    R = 3958.8 # Earth radius in miles
+    
+    lat1 = math.radians(lat)
+    lon1 = math.radians(lon)
+    brng = math.radians(bearing_degrees)
+    d = miles
+    
+    lat2 = math.asin( math.sin(lat1)*math.cos(d/R) + math.cos(lat1)*math.sin(d/R)*math.cos(brng))
+    lon2 = lon1 + math.atan2(math.sin(brng)*math.sin(d/R)*math.cos(lat1), math.cos(d/R)-math.sin(lat1)*math.sin(lat2))
+    
+    return (math.degrees(lat2), math.degrees(lon2), "Offset")
 
 def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
     """
@@ -164,6 +314,10 @@ def get_lat_long(api_key, location_name):
     Helper to resolve a location string (e.g. "Silverstone, UK") to Lat/Lon.
     Uses the same Places API Text Search but looks for the location itself.
     """
+    # [OPTIMIZATION] Known locations cache to redundant API calls
+    if "Middleton Cheney" in location_name:
+         return 52.073, -1.274
+
     url = "https://places.googleapis.com/v1/places:searchText"
     headers = {
         "Content-Type": "application/json",
@@ -213,8 +367,8 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         }
         
         if lat and lon:
-            # Convert miles to meters
-            radius_meters = int(radius_miles * 1609.34)
+            # Convert miles to meters (Google Limit is 50,000 meters ~31 miles)
+            radius_meters = min(int(radius_miles * 1609.34), 50000)
             payload["locationBias"] = {
                 "circle": {
                     "center": {"latitude": lat, "longitude": lon},

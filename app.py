@@ -7,7 +7,7 @@ import urllib.parse
 import db_manager as db
 import facebook_finder as fb_finder
 import json
-from search_service import mock_search_places, search_google_places, search_google_legacy_nearby
+from search_service import mock_search_places, search_google_places, search_google_legacy_nearby, search_outscraper
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
 from streamlit_calendar import calendar
@@ -728,7 +728,8 @@ with st.sidebar:
     st.markdown("---")
     with st.expander("⚙️ Settings (Premium Features)"):
         # Provider Selection
-        search_provider = st.radio("Search Engine", ["Google Places (Smart)", "Google Places (Legacy Proximity)", "Outscraper (Bulk Data)"], index=0, help="Smart = Best for specific intent. Legacy = Best for raw count. Outscraper = Best for comprehensive lists.")
+        # Provider Selection
+        search_provider = st.radio("Search Engine", ["Outscraper (Bulk Data)"], index=0, help="Outscraper = Best for comprehensive lists.")
         st.session_state.search_provider = search_provider
         
         # Load saved key
@@ -826,19 +827,23 @@ if "current_tab" not in st.session_state:
 # [FIX] Handle deferred tab switching to prevent StreamlitAPIException
 if "requested_tab" in st.session_state:
     tgt = st.session_state.requested_tab
-    st.session_state.current_tab = tgt
     st.session_state.nav_radio = tgt # Sync widget key
     del st.session_state.requested_tab
 
 # Navigation Bar
-st.session_state.current_tab = st.radio(
+# Navigation Bar
+# To fix "widget with key... value set via Session State API" warning:
+# We must NOT pass 'index' if we are controlling it via key='nav_radio' which is already in session_state.
+# The 'nav_radio' key in session_state acts as the source of truth.
+
+selected_tab = st.radio(
     "", 
     TABS, 
-    index=TABS.index(st.session_state.current_tab) if st.session_state.current_tab in TABS else 0,
     horizontal=True, 
     label_visibility="collapsed",
     key="nav_radio"
 )
+st.session_state.current_tab = selected_tab
 
 # Helper to sync radio
 if st.session_state.nav_radio != st.session_state.current_tab:
@@ -1176,7 +1181,9 @@ if current_tab == " Search & Add":
                 queries = search_query if isinstance(search_query, list) else [search_query]
 
                 # DETERMINE PROVIDER
-                provider = st.session_state.get("search_provider", "Google Places (Smart)")
+                # [MODIFIED] Force Outscraper only as per user request to compare results
+                provider = "Outscraper (Bulk Data)" 
+                st.session_state.search_provider = provider
                 
                 # --- OUTSCRAPER ---
                 if "Outscraper" in provider:
@@ -1184,25 +1191,47 @@ if current_tab == " Search & Add":
                     if not os_key:
                         st.error("⚠️ Outscraper API Key missing. Please go to Settings (left sidebar) and add it.")
                     else:
-                        # Outscraper uses single query string usually, or we loop.
-                        # Since it's bulk, one query "Transport & haulage" is usually enough
-                        q_str = queries[0] if isinstance(queries, list) else queries
+                        # [NEW] Multi-Keyword Loop for Outscraper (Bulk Data)
+                        # We iterate through ALL queries ("Haulage", "Transport" etc) to match Google's breadth
                         
-                        # Location needs to be full string
-                        full_loc = f"{location_search_ctx}"
+                        all_os_results = []
+                        progress_log = st.empty()
                         
-                        # Use User's Radius + High Limit
-                        results, _ = search_outscraper(os_key, q_str, full_loc, radius=search_radius, limit=200)
+                        for idx, q_str in enumerate(queries):
+                            progress_log.caption(f"Outscraper: Scanning across regions for '{q_str}' ({idx+1}/{len(queries)})...")
+                            
+                            full_loc = f"{location_search_ctx}"
+                            
+                            # Fire the wide-area scatter search for this keyword
+                            res_batch, _ = search_outscraper(
+                                os_key, 
+                                q_str, 
+                                full_loc, 
+                                radius=search_radius, 
+                                limit=200, 
+                                google_api_key=google_api_key
+                            )
+                            
+                            if isinstance(res_batch, dict) and "error" in res_batch:
+                                st.warning(f"Outscraper error for '{q_str}': {res_batch['error']}")
+                            elif isinstance(res_batch, list):
+                                all_os_results.extend(res_batch)
+                                
+                        progress_log.empty()
                         
-                        if isinstance(results, dict) and "error" in results:
-                             st.error(results['error'])
+                        if not all_os_results:
+                                st.warning("Outscraper found 0 results.")
+                                st.session_state.leads = pd.DataFrame()
+                                st.session_state.next_page_token = None
                         else:
-                             st.session_state.leads = pd.DataFrame(results)
-                             st.session_state.next_page_token = None # No token for Outscraper here
-                             if results:
-                                 st.success(f"Outscraper found {len(results)} results!")
-                             else:
-                                 st.warning("Outscraper found 0 results.")
+                                # Deduplicate
+                                temp_df = pd.DataFrame(all_os_results)
+                                before_count = len(temp_df)
+                                temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
+                                
+                                st.session_state.leads = temp_df
+                                st.session_state.next_page_token = None 
+                                st.success(f"Outscraper found {len(temp_df)} unique targets! (Merged {len(queries)} keywords)")
                 
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
@@ -1542,11 +1571,25 @@ if current_tab == "✉️ Outreach Assistant":
 
                              names = [n.strip() for n in found_directors.split('\n') if n.strip()]
                              for i, name in enumerate(names):
-                                 # Clean Name (First + Last only)
-                                 name_parts = name.split()
-                                 if len(name_parts) > 2:
-                                     cleaned_name = f"{name_parts[0]} {name_parts[-1]}"
-                                     display_name = f"{cleaned_name} ({name})"
+                                 # Clean Name (First + Last only, remove titles/commas)
+                                 # Logic: "Mr. David James Smith" -> "David Smith"
+                                 # Logic: "SMITH, David James" -> "David Smith" (Heuristic fit)
+                                 
+                                 clean_s = name.replace(",", " ").replace(".", "")
+                                 parts = clean_s.split()
+                                 
+                                 # Strip titles
+                                 titles = {"mr", "mrs", "ms", "miss", "dr", "prof", "sir"}
+                                 if parts and parts[0].lower() in titles:
+                                     parts.pop(0)
+
+                                 if len(parts) >= 2:
+                                     # Case: "David James Smith" -> David Smith
+                                     cleaned_name = f"{parts[0].title()} {parts[-1].title()}"
+                                     display_name = f"{cleaned_name}"
+                                 elif parts:
+                                     cleaned_name = parts[0].title()
+                                     display_name = cleaned_name
                                  else:
                                      cleaned_name = name
                                      display_name = name
@@ -1667,7 +1710,9 @@ Supply a source URL for every data point. Do not guess emails."""
                     with top_c1:
                          c_mode = st.radio("Action Mode", ["Draft Opener", "Handle Reply"], horizontal=True)
                     with top_c2:
-                         new_name = st.text_input("Found Contact Name", value=lead['Contact Name'])
+                         # [UPDATE] Auto-populate with latest DB value if available
+                         current_contact = lead.get('Contact Name', '')
+                         new_name = st.text_input("Found Contact Name", value=current_contact, key=f"contact_name_input_{lead['id']}")
                          if st.button("Update Contact"):
                              st.toast("Contact Saved (simulated)")
                     
