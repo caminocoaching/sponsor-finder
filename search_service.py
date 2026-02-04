@@ -161,6 +161,14 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 skipped_dist += 1
                 continue
                 
+            # [NEW] Sector Cleaning Filter
+            cat_upper = item.get("category", "").upper()
+            name_upper = name.upper()
+            excluded_terms = ["TAXI", "AIRPORT SHUTTLE", "AMBULANCE", "CHAUFFEUR", "CAB ", "MINICAB", "UBER"]
+            
+            if any(term in cat_upper for term in excluded_terms) or any(term in name_upper for term in excluded_terms):
+                continue
+
             mapped_results.append({
                 "Business Name": name,
                 "Address": item.get("full_address", item.get("address", "")),

@@ -56,16 +56,16 @@ SECTOR_HOOKS = {
 # [NEW] Optimized Search Queries for Google Places API
 # Maps the user-friendly dropdown name to a LIST of terms to search in parallel
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    "Transport & haulage": ["Haulage companies", "Transport services", "Logistics company", "Freight forwarding"],
+    "Transport & haulage": ["Haulage companies", "Logistics companies", "Freight forwarding service"],
     "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
     "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
     "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
     "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
     "Building supplies": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction supply"],
     "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food"],
-    "Insurance companies": ["Insurance Agency", "Insurance Broker", "Commercial Insurance"], 
-    "Financial services": ["Financial Consultant", "Investment service", "Wealth management"],
-    "Logistics": ["Logistics service", "Courier service", "Warehousing"],
+    "Insurance companies": ["Commercial Insurance", "Insurance Broker", "Business Insurance"], 
+    "Financial services": ["Wealth management", "Corporate finance", "Investment service"],
+    "Logistics": ["Logistics service", "Freight forwarding", "Warehousing"],
     "Printers": ["Commercial Printer", "Print shop", "Sign maker"],
     "High Net Worth companies": ["Investment Bank", "Private Equity", "Asset Management"],
 }
