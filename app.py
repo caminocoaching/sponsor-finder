@@ -1218,7 +1218,7 @@ if current_tab == " Search & Add":
                         
                         # Pagination Init
                         st.session_state.outscraper_skip = 0
-                        LIMIT_PER_KEYWORD = 40 # Increased to ensure ~30+ results after strict filtering
+                        LIMIT_PER_KEYWORD = 15 # Aim for ~50-60 results per batch (across 4 keywords)
                         
                         for idx, q_str in enumerate(queries):
                             progress_log.caption(f"Outscraper: Scanning across regions for '{q_str}' ({idx+1}/{len(queries)})...")
@@ -1257,9 +1257,13 @@ if current_tab == " Search & Add":
                                 if "Distance" in st.session_state.leads.columns:
                                      st.session_state.leads.sort_values(by="Distance", inplace=True)
                                 
+                                # Strict Limit: Max 50 Results per Page
+                                if len(st.session_state.leads) > 50:
+                                    st.session_state.leads = st.session_state.leads.head(50)
+                                
                                 # Enable Load More for Outscraper
                                 st.session_state.next_page_token = "outscraper_more" 
-                                st.success(f"Outscraper found {len(temp_df)} unique targets! (Merged {len(queries)} keywords)")
+                                st.success(f"Outscraper: Showing closest {len(st.session_state.leads)} targets (Merged keywords)")
                 
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
@@ -1369,7 +1373,7 @@ if current_tab == " Search & Add":
                  if token == "outscraper_more":
                      os_key = st.session_state.user_profile.get("outscraper_key")
                      queries = search_query if isinstance(search_query, list) else [search_query]
-                     LIMIT_PER_KEYWORD = 40
+                     LIMIT_PER_KEYWORD = 15
                      
                      st.session_state.outscraper_skip += LIMIT_PER_KEYWORD
                      current_skip = st.session_state.outscraper_skip
@@ -1392,6 +1396,11 @@ if current_tab == " Search & Add":
                      
                      if new_os_results:
                          new_df = pd.DataFrame(new_os_results)
+                         
+                         # Limit new batch to 50
+                         if len(new_df) > 50:
+                             new_df = new_df.head(50)
+                             
                          # Concat
                          st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
                          # Dedupe again just in case
