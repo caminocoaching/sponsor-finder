@@ -11,7 +11,11 @@ from outscraper import OutscraperClient # [NEW] Use official SDK
 BLACKLIST_TERMS = [
     "taxi", "cab", "chauffeur", "limousine", "shuttle", "ambulance", 
     "courier", "delivery service", "uber", "lyft", 
-    "przeprowadzki", "moving company", "removals", "house clearance"
+    "przeprowadzki", "moving company", "removals", "house clearance",
+    "post office", "service point", "parcel", "inpost", "collection point", "pickup", "dropoff",
+    "cleaner", "cleaning", "car wash", "valeting", "laundry", "dry cleaner",
+    "food", "pizza", "takeaway", "restaurant", "catering", "burger", "chicken", "cafe", "coffee",
+    "storage", "self storage", "lock up", "garage", "repair", "mechanic", "tyre", "tires", "breakdown"
 ]
 
 def search_outscraper(api_key, query, location_str, radius=50, limit=100, google_api_key=None):
