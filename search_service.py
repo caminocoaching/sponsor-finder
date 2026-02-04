@@ -3,9 +3,10 @@ import math
 import time
 import random
 import json
-import urllib.parse
-import streamlit as st # Added for debug feedback
-from outscraper import OutscraperClient # Keeping import, though we use requests for V3 control
+from outscraper import OutscraperClient 
+import streamlit as st
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # [FILTER] Generic filters to clean up noisy results
 BLACKLIST_TERMS = [
@@ -18,117 +19,169 @@ BLACKLIST_TERMS = [
     "storage", "self storage", "lock up", "garage", "repair", "mechanic", "tyre", "tires", "breakdown"
 ]
 
+def get_robust_session():
+    """
+    Creates a requests session with retry logic for network resilience.
+    """
+    session = requests.Session()
+    # Retry on: 500, 502, 503, 504 and connection errors
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
 def search_outscraper(api_key, query, location_str, radius=50, limit=20, google_api_key=None):
     """
-    COST-OPTIMIZED SEARCH (V3):
-    Uses Outscraper V3 API with strict coordinate + dropoff filtering.
-    - Prevents "national" searches (saving money)
-    - Enforces strict radius (improving accuracy)
-    - Returns ~20 highly relevant results instead of 1000+ junk ones.
+    ROBUST UNIVERSAL SEARCH:
+    1. Geocode location
+    2. Try Outscraper SDK (Google Maps Search)
+    3. Fallback to Direct V3 API if SDK fails (DNS/Network issues)
+    4. Strict Filtering (Radius & Blacklist)
     """
-    try:
-        st.toast(f"Outscraper Optimization: Targeting '{query}' within {radius} miles...", icon="🎯")
-        
-        # 1. Get Coordinates (Critical)
-        start_lat, start_lon = None, None
-        if google_api_key:
-             start_lat, start_lon = get_lat_long(google_api_key, location_str)
-        
-        if not start_lat or not start_lon:
-             # Fallback if geocoding fails
-             st.error("Could not determine coordinates for strict search. Aborting to save cost.")
-             return [], None
+    st.toast(f"Outscraper: Universal Search ({query})...", icon="🌍")
 
-        # 2. Calculate Strict Radius
-        # 1 mile = 1609.34 meters
-        radius_meters = int(radius * 1609.34)
+    # 1. Get Coordinates (Critical for strict search)
+    start_lat, start_lon = None, None
+    if google_api_key:
+         start_lat, start_lon = get_lat_long(google_api_key, location_str)
+    
+    if not start_lat or not start_lon:
+         st.error("Could not determine coordinates. Aborting search to protect budget.")
+         return [], None
+
+    radius_meters = int(radius * 1609.34)
+    zoom_level = 12 # Default City Zoom
+    
+    # Attempt 1: SDK (Preferred)
+    try:
+        # Construct Query with Viewport Intent
+        # "Category @Lat,Lon,Zoom"
+        # This tells Google we are looking at this specific map area
+        sdk_query = f"{query} @{start_lat},{start_lon},{zoom_level}z"
         
-        # 3. Construct V3 Request (Low Cost Mode)
-        # We use the REST API directly to ensure we use the 'dropoff' parameter correctly
+        # st.caption(f"Trying SDK: {sdk_query}")
+        
+        client = OutscraperClient(api_key=api_key)
+        
+        # We assume SDK might accept kwargs for 'dropoff', but if not, we filter later anyway.
+        # We pass dropoff just in case it is supported (it often is passed through)
+        results = client.google_maps_search(
+            [sdk_query],
+            limit=limit,
+            language='en',
+            region='UK',
+            dropoff=radius_meters 
+        )
+        
+        # Flatten structure
+        raw_businesses = []
+        if results and len(results) > 0:
+             raw_businesses = results[0]
+             
+        return process_and_filter_results(raw_businesses, start_lat, start_lon, radius, "Outscraper SDK")
+
+    except Exception as e:
+        st.warning(f"SDK Failed ({str(e)}). Switching to Direct API Fallback...")
+        # If SDK fails, fall through to Direct API
+        pass
+
+    # Attempt 2: Direct V3 API (Fallback)
+    try:
+        session = get_robust_session()
         endpoint = "https://api.outscraper.com/maps/search-v3"
         
         params = {
-            "query": query,             # Just the sector, NO location string
+            "query": query,
             "coordinates": f"{start_lat},{start_lon}",
-            "dropoff": radius_meters,   # STRICT LIMIT
-            "limit": limit,             # Cap results to save money
+            "dropoff": radius_meters,
+            "limit": limit,
             "language": "en",
             "region": "UK",
-            "async": "false"            # Synch mode for immediate results
+            "async": "false"
         }
         
         headers = {"X-API-KEY": api_key}
         
-        # st.caption(f"Connecting to Outscraper: {query} @ {start_lat},{start_lon} (Radius: {radius_meters}m)")
-        
-        resp = requests.get(endpoint, params=params, headers=headers)
+        resp = session.get(endpoint, params=params, headers=headers, timeout=20)
         
         if resp.status_code != 200:
              return {"error": f"Outscraper API Error {resp.status_code}: {resp.text}"}, None
              
         data = resp.json()
-        
-        # Parse V3 Response Structure: data['data'][0] is the list of results
-        businesses = []
+        raw_businesses = []
         if "data" in data and len(data["data"]) > 0:
-             businesses = data["data"][0]
+             raw_businesses = data["data"][0]
              
-        # 4. Process & Strict Filter
-        mapped_results = []
+        return process_and_filter_results(raw_businesses, start_lat, start_lon, radius, "Outscraper V3 API")
         
-        for item in businesses:
-            name = item.get("name", "Unknown")
-            category = item.get("category", item.get("type", ""))
-            
-            # [FILTER] Blacklist Check (Safety Net)
-            text_to_check = (name + " " + str(category)).lower()
-            if any(term in text_to_check for term in BLACKLIST_TERMS):
-                continue
-
-            # [FILTER] Distance Check (Double Safety)
-            lat = item.get("latitude")
-            lon = item.get("longitude")
-            
-            dist_val = None
-            if lat and lon:
-                 dist_val = haversine_distance(start_lat, start_lon, lat, lon)
-                 # Hard Reject if outside 1.1x radius (allow margin for road vs flight)
-                 if dist_val > (radius * 1.1):
-                      continue
-                 dist_val = round(dist_val, 1)
-
-            mapped_results.append({
-                "Business Name": name,
-                "Address": item.get("full_address", item.get("address", "")),
-                "Rating": item.get("rating", 0.0),
-                "Sector": category if category else "Search Result",
-                "Website": item.get("site", ""),
-                "Phone": item.get("phone", ""),
-                "lat": lat,
-                "lon": lon,
-                "Source": "Outscraper V3",
-                "Distance": dist_val
-            })
-            
-        return mapped_results, None
-
     except Exception as e:
-        return {"error": f"Search Error: {str(e)}"}, None
+        return {"error": f"All Search Methods Failed: {str(e)}"}, None
+
+def process_and_filter_results(businesses, start_lat, start_lon, radius_miles, source_label):
+    """
+    Common filtering logic for both SDK and API results.
+    """
+    mapped_results = []
+    skipped_dist = 0
+    skipped_black = 0
+    
+    for item in businesses:
+        name = item.get("name", "Unknown")
+        category = item.get("category", item.get("type", ""))
+        
+        # 1. Blacklist Check
+        text_to_check = (name + " " + str(category)).lower()
+        if any(term in text_to_check for term in BLACKLIST_TERMS):
+            skipped_black += 1
+            continue
+
+        # 2. Distance Check
+        lat = item.get("latitude")
+        lon = item.get("longitude")
+        
+        dist_val = None
+        if lat and lon:
+             dist_val = haversine_distance(start_lat, start_lon, lat, lon)
+             # Strict Filter: Must be within radius (allow 10% margin)
+             if dist_val > (radius_miles * 1.1):
+                  skipped_dist += 1
+                  continue
+             dist_val = round(dist_val, 1)
+
+        mapped_results.append({
+            "Business Name": name,
+            "Address": item.get("full_address", item.get("address", "")),
+            "Rating": item.get("rating", 0.0),
+            "Sector": category if category else "Search Result",
+            "Website": item.get("site", ""),
+            "Phone": item.get("phone", ""),
+            "lat": lat,
+            "lon": lon,
+            "Source": source_label,
+            "Distance": dist_val
+        })
+    
+    # st.toast(f"Filtered: {skipped_dist} too far, {skipped_black} blacklisted.", icon="🧹")
+    return mapped_results, None
+
 
 def get_new_coords(lat, lon, miles, bearing_degrees):
     """
     Calculates new Lat/Lon given a starting point, distance (miles), and bearing.
     """
     R = 3958.8 # Earth radius in miles
-    
     lat1 = math.radians(lat)
     lon1 = math.radians(lon)
     brng = math.radians(bearing_degrees)
     d = miles
-    
     lat2 = math.asin( math.sin(lat1)*math.cos(d/R) + math.cos(lat1)*math.sin(d/R)*math.cos(brng))
     lon2 = lon1 + math.atan2(math.sin(brng)*math.sin(d/R)*math.cos(lat1), math.cos(d/R)-math.sin(lat1)*math.sin(lat2))
-    
     return (math.degrees(lat2), math.degrees(lon2), "Offset")
 
 def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
@@ -137,9 +190,7 @@ def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
     using 'keyword' matching rather than 'text' intent matching.
     """
     url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-    
     radius_meters = int(radius_miles * 1609.34)
-    
     params = {
         "location": f"{lat},{lon}",
         "radius": radius_meters,
@@ -148,7 +199,9 @@ def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
     }
     
     try:
-        resp = requests.get(url, params=params)
+        # Use robust session here too
+        session = get_robust_session()
+        resp = session.get(url, params=params)
         data = resp.json()
         
         if data.get("status") not in ["OK", "ZERO_RESULTS"]:
@@ -162,7 +215,7 @@ def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
                 "Rating": place.get("rating", 0.0),
                 "Sector": keyword,
                 "Distance": round(haversine_distance(lat, lon, place["geometry"]["location"]["lat"], place["geometry"]["location"]["lng"]), 1),
-                "Website": "", # Legacy search doesn't return website in list view usually, needs detail fetch. Ignored for speed.
+                "Website": "", 
                 "lat": place["geometry"]["location"]["lat"],
                 "lon": place["geometry"]["location"]["lng"],
                 "Source": "Google Nearby"
@@ -176,17 +229,13 @@ def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
     Calculate the great circle distance in miles between two points 
-    on the earth (specified in decimal degrees)
     """
-    # Convert decimal degrees to radians 
     lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
-    
-    # Haversine formula 
     dlon = lon2 - lon1 
     dlat = lat2 - lat1 
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     c = 2 * math.asin(math.sqrt(a)) 
-    r = 3959 # Radius of earth in miles
+    r = 3959 # Radius of earth
     return c * r
 
 def mock_search_places(location, radius, sector, mode="sector"):
@@ -196,8 +245,6 @@ def mock_search_places(location, radius, sector, mode="sector"):
     time.sleep(1.0)
     mock_data = []
     num_results = random.randint(5, 15)
-    
-    # Lat/Lon for Silverstone approx (just for map demo purposes)
     base_lat = 52.0733
     base_lon = -1.0146
     
@@ -239,9 +286,7 @@ def mock_search_places(location, radius, sector, mode="sector"):
 def get_lat_long(api_key, location_name):
     """
     Helper to resolve a location string (e.g. "Silverstone, UK") to Lat/Lon.
-    Uses the same Places API Text Search but looks for the location itself.
     """
-    # [OPTIMIZATION] Known locations cache to redundant API calls
     if "Middleton Cheney" in location_name:
          return 52.073, -1.274
 
@@ -254,7 +299,8 @@ def get_lat_long(api_key, location_name):
     payload = {"textQuery": location_name}
     
     try:
-        resp = requests.post(url, json=payload, headers=headers)
+        session = get_robust_session()
+        resp = session.post(url, json=payload, headers=headers)
         data = resp.json()
         if "places" in data and len(data["places"]) > 0:
             loc = data["places"][0]["location"]
@@ -266,7 +312,6 @@ def get_lat_long(api_key, location_name):
 def search_google_places(api_key, query, location_ctx, radius_miles, sector_name=None, pagetoken=None):
     """
     Searches Google Places API (New Text Search).
-    Returns (results_list, next_page_token).
     """
     url = "https://places.googleapis.com/v1/places:searchText"
     
@@ -276,13 +321,11 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.location,places.businessStatus,places.websiteUri,nextPageToken"
     }
     
-    # 1. Prepare Payload
     start_lat, start_lon = get_lat_long(api_key, location_ctx)
 
     if pagetoken:
         payload = {"pageToken": pagetoken}
     else:
-        # Geocode center only for first request
         lat, lon = start_lat, start_lon
         
         payload = {
@@ -291,7 +334,6 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         }
         
         if lat and lon:
-            # Convert miles to meters (Google Limit is 50,000 meters ~31 miles)
             radius_meters = min(int(radius_miles * 1609.34), 50000)
             payload["locationBias"] = {
                 "circle": {
@@ -299,16 +341,9 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
                     "radius": radius_meters
                 }
             }
-            # Also append location to query for good measure if bias is weak
-            # [OPTIMIZED] Use natural language phrasing that matches Google Maps Web behavior
-            # "Transport & haulage within 50 miles of Middleton Cheney" works better than "near"
             payload["textQuery"] = f"{query} within {radius_miles} miles of {location_ctx}"
         else:
-             # Fallback if geocode fails
              payload["textQuery"] = f"{query} within {radius_miles} miles of {location_ctx}"
-             
-        # openNow: False - Removed to see all businesses (even closed ones)
-        
     
     current_results = []
     next_token = None
@@ -320,7 +355,8 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         else:
             st.toast(f"Starting search for '{query}'...", icon="🔎")
             
-        response = requests.post(url, json=payload, headers=headers)
+        session = get_robust_session()
+        response = session.post(url, json=payload, headers=headers)
         
         if response.status_code != 200:
              return {"error": f"API Error {response.status_code}: {response.text}"}, None
@@ -328,7 +364,6 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
         data = response.json()
         places = data.get("places", [])
         
-        # Process this batch
         batch_results = []
         
         for place in places:
@@ -342,12 +377,10 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
             lat = loc.get("latitude")
             lon = loc.get("longitude")
             
-            # Calc Distance
             dist_val = None
             if lat and lon and start_lat and start_lon:
                  dist_val = round(haversine_distance(start_lat, start_lon, lat, lon), 1)
 
-            # Simple result object
             res_obj = {
                 "Business Name": name,
                 "Address": addr,
