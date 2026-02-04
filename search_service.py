@@ -7,6 +7,13 @@ import urllib.parse
 import streamlit as st # Added for debug feedback
 from outscraper import OutscraperClient # [NEW] Use official SDK
 
+# [FILTER] Generic filters to clean up noisy results
+BLACKLIST_TERMS = [
+    "taxi", "cab", "chauffeur", "limousine", "shuttle", "ambulance", 
+    "courier", "delivery service", "uber", "lyft", 
+    "przeprowadzki", "moving company", "removals", "house clearance"
+]
+
 def search_outscraper(api_key, query, location_str, radius=50, limit=100, google_api_key=None):
     """
     Uses Outscraper SDK to find businesses. Best for comprehensive lists.
@@ -115,11 +122,19 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
                             batch = sub_res[0] if isinstance(sub_res[0], list) else sub_res
                             
                             for item in batch:
+                                name = item.get("name", "Unknown")
+                                category = item.get("category", item.get("type", ""))
+                                
+                                # [FILTER] Blacklist Check
+                                text_to_check = (name + " " + str(category)).lower()
+                                if any(term in text_to_check for term in BLACKLIST_TERMS):
+                                    continue
+
                                 mapped_results.append({
-                                    "Business Name": item.get("name", "Unknown"),
+                                    "Business Name": name,
                                     "Address": item.get("full_address", item.get("address", "")),
                                     "Rating": item.get("rating", 0.0),
-                                    "Sector": item.get("category", item.get("type", "Search Result")),
+                                    "Sector": category if category else "Search Result",
                                     "Website": item.get("site", ""),
                                     "Phone": item.get("phone", ""),
                                     "lat": item.get("latitude"),
@@ -186,11 +201,19 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
             for batch in batches:
                 if isinstance(batch, list):
                     for item in batch:
+                        name = item.get("name", "Unknown")
+                        category = item.get("category", item.get("type", ""))
+                        
+                        # [FILTER] Blacklist Check
+                        text_to_check = (name + " " + str(category)).lower()
+                        if any(term in text_to_check for term in BLACKLIST_TERMS):
+                            continue
+
                         mapped_results.append({
-                            "Business Name": item.get("name", "Unknown"),
+                            "Business Name": name,
                             "Address": item.get("full_address", item.get("address", "")),
                             "Rating": item.get("rating", 0.0),
-                            "Sector": item.get("category", item.get("type", "Search Result")),
+                            "Sector": category if category else "Search Result",
                             "Website": item.get("site", ""),
                             "Phone": item.get("phone", ""),
                             "lat": item.get("latitude"),
