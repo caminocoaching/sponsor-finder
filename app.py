@@ -849,7 +849,7 @@ if "requested_tab" in st.session_state:
 # The 'nav_radio' key in session_state acts as the source of truth.
 
 selected_tab = st.radio(
-    "", 
+    "Navigation", 
     TABS, 
     horizontal=True, 
     label_visibility="collapsed",
