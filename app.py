@@ -56,7 +56,7 @@ SECTOR_HOOKS = {
 # [NEW] Optimized Search Queries for Google Places API
 # Maps the user-friendly dropdown name to a LIST of terms to search in parallel
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    "Transport & haulage": ["Haulage companies", "Logistics company", "Freight forwarding", "Trucking company", "Pallet distribution"],
+    "Transport & haulage": ["Haulage companies", "Trucking company", "Road freight transport"],
     "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
     "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
     "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
