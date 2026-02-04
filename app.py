@@ -1394,7 +1394,10 @@ if current_tab == " Search & Add":
                 st.map(df_results)
                 
         # Show Website in table
-        disp_cols = ["In List", "Business Name", "Address", "Sector", "Rating"]
+        # User requested replacing Rating with Distance
+        last_col = "Distance" if "Distance" in df_results.columns else "Rating"
+        disp_cols = ["In List", "Business Name", "Address", "Sector", last_col]
+        
         if "Website" in df_results.columns:
             disp_cols.insert(3, "Website")
             

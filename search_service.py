@@ -19,10 +19,12 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
         # 1. Try to resolve coordinates if Google Key is present
         coords_param = None
         zoom_level = 10 # Default for ~50 miles
+        start_lat = None
+        start_lon = None
         
         if google_api_key:
-             lat, lon = get_lat_long(google_api_key, location_str)
-             if lat and lon:
+             start_lat, start_lon = get_lat_long(google_api_key, location_str)
+             if start_lat and start_lon:
                  # Calculate Zoom based on Radius (Approximate)
                  # 14 = street, 10 = city, 7 = region
                  if radius <= 5: zoom_level = 13
@@ -36,7 +38,7 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
                  # Outscraper supports implied zoom in coordinates sometimes, or we try the comma format
                  # But standard Google Maps URL param is @lat,lon,zoomz
                  # Let's try the specific format that defines viewport:
-                 coords_param = f"@{lat},{lon},{zoom_level}z"
+                 coords_param = f"@{start_lat},{start_lon},{zoom_level}z"
         
         # 2. Construct Query List (Scatter Strategy for Large Value)
         # Detailed "Viewport" searches often fail to return ALL results (Google cap).
@@ -193,7 +195,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, google
                             "Phone": item.get("phone", ""),
                             "lat": item.get("latitude"),
                             "lon": item.get("longitude"),
-                            "Source": "Outscraper SDK"
+                            "Source": "Outscraper SDK",
+                            "Distance": round(haversine_distance(start_lat, start_lon, item.get("latitude"), item.get("longitude")), 1) if (start_lat and start_lon and item.get("latitude") and item.get("longitude")) else None
                         })
                 
         return mapped_results, None
@@ -247,6 +250,7 @@ def search_google_legacy_nearby(api_key, keyword, lat, lon, radius_miles):
                 "Address": place.get("vicinity"),
                 "Rating": place.get("rating", 0.0),
                 "Sector": keyword,
+                "Distance": round(haversine_distance(lat, lon, place["geometry"]["location"]["lat"], place["geometry"]["location"]["lng"]), 1),
                 "Website": "", # Legacy search doesn't return website in list view usually, needs detail fetch. Ignored for speed.
                 "lat": place["geometry"]["location"]["lat"],
                 "lon": place["geometry"]["location"]["lng"],
@@ -297,6 +301,7 @@ def mock_search_places(location, radius, sector, mode="sector"):
                 "Address": f"{random.randint(1,99)} Racing Lane, {location}",
                 "Rating": 5.0,
                 "Sector": "Motorsport Related",
+                "Distance": round(random.uniform(0.5, radius), 1),
                 "lat": base_lat + random.uniform(-0.05, 0.05),
                 "lon": base_lon + random.uniform(-0.05, 0.05)
             })
@@ -312,6 +317,7 @@ def mock_search_places(location, radius, sector, mode="sector"):
                 "Address": f"{random.randint(1, 999)} High St, {location}",
                 "Rating": round(random.uniform(3.5, 5.0), 1),
                 "Sector": sector,
+                "Distance": round(random.uniform(0.5, radius), 1),
                 "lat": base_lat + random.uniform(-0.05, 0.05),
                 "lon": base_lon + random.uniform(-0.05, 0.05)
             })
@@ -360,16 +366,13 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
     }
     
     # 1. Prepare Payload
+    start_lat, start_lon = get_lat_long(api_key, location_ctx)
+
     if pagetoken:
         payload = {"pageToken": pagetoken}
-        # V1 Text Search requires the textQuery to be present even with pageToken? 
-        # Documentation says "pageToken" is part of the request body.
-        # It is safest to include the original textQuery too, but usually token implies context.
-        # Let's try minimal first, but if it fails we might need to cache the query.
-        # ACTUALLY: The standard pattern is just pageToken in body.
     else:
         # Geocode center only for first request
-        lat, lon = get_lat_long(api_key, location_ctx)
+        lat, lon = start_lat, start_lon
         
         payload = {
             "textQuery": query,
@@ -428,16 +431,23 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
             lat = loc.get("latitude")
             lon = loc.get("longitude")
             
+            # Calc Distance
+            dist_val = None
+            if lat and lon and start_lat and start_lon:
+                 dist_val = round(haversine_distance(start_lat, start_lon, lat, lon), 1)
+
             # Simple result object
-            batch_results.append({
+            res_obj = {
                 "Business Name": name,
                 "Address": addr,
                 "Rating": rating,
                 "Sector": sector_name if sector_name else "Search Result",
+                "Distance": dist_val,
                 "Website": website,
                 "lat": lat,
                 "lon": lon
-            })
+            }
+            batch_results.append(res_obj)
         
         current_results = batch_results
         next_token = data.get("nextPageToken")
