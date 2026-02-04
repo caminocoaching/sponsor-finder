@@ -729,7 +729,7 @@ with st.sidebar:
     with st.expander("⚙️ Settings (Premium Features)"):
         # Provider Selection
         # Provider Selection
-        search_provider = st.radio("Search Engine", ["Outscraper (Bulk Data)"], index=0, help="Outscraper = Best for comprehensive lists.")
+        search_provider = st.radio("Search Engine", ["Outscraper (Bulk Data)", "Google Places (Official)"], index=0, help="Outscraper = Best for comprehensive lists. Google = Best for local validated data.")
         st.session_state.search_provider = search_provider
         
         # Load saved key
@@ -1200,9 +1200,9 @@ if current_tab == " Search & Add":
                 queries = search_query if isinstance(search_query, list) else [search_query]
 
                 # DETERMINE PROVIDER
-                # [MODIFIED] Force Outscraper only as per user request to compare results
-                provider = "Outscraper (Bulk Data)" 
-                st.session_state.search_provider = provider
+                # Respect the user's choice from Settings
+                provider = st.session_state.get("search_provider", "Outscraper (Bulk Data)")
+                # st.session_state.search_provider = provider # No need to re-set, it's bound to widget
                 
                 # --- OUTSCRAPER ---
                 if "Outscraper" in provider:
@@ -1252,6 +1252,40 @@ if current_tab == " Search & Add":
                                 st.session_state.next_page_token = None 
                                 st.success(f"Outscraper found {len(temp_df)} unique targets! (Merged {len(queries)} keywords)")
                 
+                # --- GOOGLE PLACES (OFFICIAL V1) ---
+                elif "Google" in provider and google_api_key:
+                    from search_service import search_google_places
+                    st.toast("Searching with Google Places API...", icon="🔎")
+                    
+                    all_google_results = []
+                    progress_log = st.empty()
+                    
+                    for idx, q_str in enumerate(queries):
+                        progress_log.caption(f"Google: Scanning for '{q_str}' ({idx+1}/{len(queries)})...")
+                        
+                        res, _ = search_google_places(
+                            google_api_key, 
+                            q_str, 
+                            location_search_ctx, 
+                            search_radius,
+                            sector_name=sector_arg
+                        )
+                        
+                        if isinstance(res, list):
+                             all_google_results.extend(res)
+                        elif isinstance(res, dict) and "error" in res:
+                             st.error(f"Google Error: {res['error']}")
+                             
+                    progress_log.empty()
+                    
+                    if all_google_results:
+                         temp_df = pd.DataFrame(all_google_results)
+                         temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
+                         st.session_state.leads = temp_df
+                         st.success(f"Google found {len(temp_df)} targets!")
+                    else:
+                         st.warning("Google found 0 results.")
+
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
                     # Legacy uses 'keyword' and 'rankby=distance'. 
