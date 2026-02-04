@@ -56,7 +56,7 @@ SECTOR_HOOKS = {
 # [NEW] Optimized Search Queries for Google Places API
 # Maps the user-friendly dropdown name to a LIST of terms to search in parallel
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    "Transport & haulage": ["Haulage companies", "Trucking company", "Road freight transport"],
+    "Transport & haulage": ["Haulage companies", "Transport services", "Logistics company", "Freight forwarding"],
     "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
     "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
     "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
@@ -729,7 +729,7 @@ with st.sidebar:
     with st.expander("⚙️ Settings (Premium Features)"):
         # Provider Selection
         # Provider Selection
-        search_provider = st.radio("Search Engine", ["Outscraper (Bulk Data)", "Google Places (Official)"], index=0, help="Outscraper = Best for comprehensive lists. Google = Best for local validated data.")
+        search_provider = st.radio("Search Engine", ["Outscraper (Bulk Data)"], index=0, help="Outscraper = Best for comprehensive lists.")
         st.session_state.search_provider = search_provider
         
         # Load saved key
@@ -849,7 +849,7 @@ if "requested_tab" in st.session_state:
 # The 'nav_radio' key in session_state acts as the source of truth.
 
 selected_tab = st.radio(
-    "Navigation", 
+    "", 
     TABS, 
     horizontal=True, 
     label_visibility="collapsed",
@@ -1200,9 +1200,9 @@ if current_tab == " Search & Add":
                 queries = search_query if isinstance(search_query, list) else [search_query]
 
                 # DETERMINE PROVIDER
-                # Respect the user's choice from Settings
-                provider = st.session_state.get("search_provider", "Outscraper (Bulk Data)")
-                # st.session_state.search_provider = provider # No need to re-set, it's bound to widget
+                # [MODIFIED] Force Outscraper only as per user request to compare results
+                provider = "Outscraper (Bulk Data)" 
+                st.session_state.search_provider = provider
                 
                 # --- OUTSCRAPER ---
                 if "Outscraper" in provider:
@@ -1216,6 +1216,10 @@ if current_tab == " Search & Add":
                         all_os_results = []
                         progress_log = st.empty()
                         
+                        # Pagination Init
+                        st.session_state.outscraper_skip = 0
+                        LIMIT_PER_KEYWORD = 40 # Increased to ensure ~30+ results after strict filtering
+                        
                         for idx, q_str in enumerate(queries):
                             progress_log.caption(f"Outscraper: Scanning across regions for '{q_str}' ({idx+1}/{len(queries)})...")
                             
@@ -1227,7 +1231,8 @@ if current_tab == " Search & Add":
                                 q_str, 
                                 full_loc, 
                                 radius=search_radius, 
-                                limit=200, 
+                                limit=LIMIT_PER_KEYWORD,
+                                skip=0,
                                 google_api_key=google_api_key
                             )
                             
@@ -1249,43 +1254,13 @@ if current_tab == " Search & Add":
                                 temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
                                 
                                 st.session_state.leads = temp_df
-                                st.session_state.next_page_token = None 
+                                if "Distance" in st.session_state.leads.columns:
+                                     st.session_state.leads.sort_values(by="Distance", inplace=True)
+                                
+                                # Enable Load More for Outscraper
+                                st.session_state.next_page_token = "outscraper_more" 
                                 st.success(f"Outscraper found {len(temp_df)} unique targets! (Merged {len(queries)} keywords)")
                 
-                # --- GOOGLE PLACES (OFFICIAL V1) ---
-                elif "Google" in provider and google_api_key:
-                    from search_service import search_google_places
-                    st.toast("Searching with Google Places API...", icon="🔎")
-                    
-                    all_google_results = []
-                    progress_log = st.empty()
-                    
-                    for idx, q_str in enumerate(queries):
-                        progress_log.caption(f"Google: Scanning for '{q_str}' ({idx+1}/{len(queries)})...")
-                        
-                        res, _ = search_google_places(
-                            google_api_key, 
-                            q_str, 
-                            location_search_ctx, 
-                            search_radius,
-                            sector_name=sector_arg
-                        )
-                        
-                        if isinstance(res, list):
-                             all_google_results.extend(res)
-                        elif isinstance(res, dict) and "error" in res:
-                             st.error(f"Google Error: {res['error']}")
-                             
-                    progress_log.empty()
-                    
-                    if all_google_results:
-                         temp_df = pd.DataFrame(all_google_results)
-                         temp_df.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
-                         st.session_state.leads = temp_df
-                         st.success(f"Google found {len(temp_df)} targets!")
-                    else:
-                         st.warning("Google found 0 results.")
-
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
                     # Legacy uses 'keyword' and 'rankby=distance'. 
@@ -1386,32 +1361,77 @@ if current_tab == " Search & Add":
 
     # LOAD MORE BUTTON
     if st.session_state.get("next_page_token"):
-        if st.button("⬇️ Deeper Search (Next 20 Results)"):
+        if st.button("⬇️ Deeper Search (Next Batch)"):
              with st.spinner("Fetching next page..."):
                  token = st.session_state.next_page_token
-                 sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
-                 new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg, pagetoken=token)
                  
-                 if isinstance(new_results, dict) and "error" in new_results:
-                     st.error(f"Google API Error: {new_results['error']}")
-                     # Do not update token so user can retry? Or clear it?
-                     # Usually token is single-use, but if error was transient...
-                     # Google tokens usually expire if used.
-                     # Let's keep the token for a retry if it was a network error, but if it was Invalid Argument, it is dead.
-                 elif new_results:
-                     # Append to existing DataFrame
-                     new_df = pd.DataFrame(new_results)
-                     st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
-                     st.success(f"Added {len(new_results)} more! Total: {len(st.session_state.leads)}")
+                 # --- OUTSCRAPER LOAD MORE ---
+                 if token == "outscraper_more":
+                     os_key = st.session_state.user_profile.get("outscraper_key")
+                     queries = search_query if isinstance(search_query, list) else [search_query]
+                     LIMIT_PER_KEYWORD = 40
                      
-                     st.session_state.next_page_token = new_token # Update token (or None if done)
-                     if not new_token:
-                         st.info("✅ All pages loaded.")
-                     st.rerun()
+                     st.session_state.outscraper_skip += LIMIT_PER_KEYWORD
+                     current_skip = st.session_state.outscraper_skip
+                     
+                     new_os_results = []
+                     
+                     for idx, q_str in enumerate(queries):
+                        full_loc = f"{location_search_ctx}"
+                        res_batch, _ = search_outscraper(
+                            os_key, 
+                            q_str, 
+                            full_loc, 
+                            radius=search_radius, 
+                            limit=LIMIT_PER_KEYWORD,
+                            skip=current_skip,
+                            google_api_key=google_api_key
+                        )
+                        if isinstance(res_batch, list):
+                            new_os_results.extend(res_batch)
+                     
+                     if new_os_results:
+                         new_df = pd.DataFrame(new_os_results)
+                         # Concat
+                         st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
+                         # Dedupe again just in case
+                         st.session_state.leads.drop_duplicates(subset=["Business Name"], keep="first", inplace=True)
+                         
+                         if "Distance" in st.session_state.leads.columns:
+                             st.session_state.leads.sort_values(by="Distance", inplace=True)
+                             
+                         st.success(f"Added {len(new_df)} more! Total: {len(st.session_state.leads)}")
+                         st.rerun()
+                     else:
+                         st.warning("No more results found.")
+                         st.session_state.next_page_token = None
+                         st.rerun()
+                 
+                 # --- GOOGLE LOAD MORE ---
                  else:
-                     st.warning("No more results found.")
-                     st.session_state.next_page_token = None
-                     st.rerun()
+                     sector_arg = search_query if search_mode == "Sector Search" else "Target Company"
+                     new_results, new_token = search_google_places(google_api_key, search_query, location_search_ctx, search_radius, sector_name=sector_arg, pagetoken=token)
+                     
+                     if isinstance(new_results, dict) and "error" in new_results:
+                         st.error(f"Google API Error: {new_results['error']}")
+                         # Do not update token so user can retry? Or clear it?
+                         # Usually token is single-use, but if error was transient...
+                         # Google tokens usually expire if used.
+                         # Let's keep the token for a retry if it was a network error, but if it was Invalid Argument, it is dead.
+                     elif new_results:
+                         # Append to existing DataFrame
+                         new_df = pd.DataFrame(new_results)
+                         st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
+                         st.success(f"Added {len(new_results)} more! Total: {len(st.session_state.leads)}")
+                         
+                         st.session_state.next_page_token = new_token # Update token (or None if done)
+                         if not new_token:
+                             st.info("✅ All pages loaded.")
+                         st.rerun()
+                     else:
+                         st.warning("No more results found.")
+                         st.session_state.next_page_token = None
+                         st.rerun()
 
     # Post-Processing: Check for Duplicates (Run always if leads exist)
     if not st.session_state.leads.empty:
