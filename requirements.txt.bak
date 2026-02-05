@@ -1,0 +1,10 @@
+streamlit
+pandas
+requests
+gspread
+google-auth
+streamlit-calendar
+pdfplumber
+playwright
+
+outscraper

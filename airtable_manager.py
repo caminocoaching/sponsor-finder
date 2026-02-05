@@ -23,7 +23,7 @@ class AirtableManager:
             "Last Contact": "last contact",
             "Next Action": "next action",
             "Contact Name": "contact name",
-            "Value": "revenue",
+            "Value": "Value",
             # "Notes JSON": "notes json"      # Missing in Airtable
         }
         # Reverse map for fetching
@@ -84,6 +84,10 @@ class AirtableManager:
                     "profile": profile
                 }
         except Exception as e:
+            if "403" in str(e) or (hasattr(e, 'response') and e.response.status_code == 403):
+                 # Only show once to avoid spam? No, good to show.
+                 pass 
+                 # st.warning(f"Airtable: Access denied to '{self.users_table_name}'. Check permissions.")
             print(f"Airtable User Fetch Error: {e}")
             
         return None

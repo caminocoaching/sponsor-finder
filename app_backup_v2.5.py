@@ -56,16 +56,16 @@ SECTOR_HOOKS = {
 # [NEW] Optimized Search Queries for Google Places API
 # Maps the user-friendly dropdown name to a LIST of terms to search in parallel
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    "Transport & haulage": ["Haulage companies", "Logistics companies", "Freight forwarding service"],
+    "Transport & haulage": ["Haulage companies", "Transport services", "Logistics company", "Freight forwarding"],
     "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
     "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
     "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
     "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
     "Building supplies": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction supply"],
     "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food"],
-    "Insurance companies": ["Commercial Insurance", "Insurance Broker", "Business Insurance"], 
-    "Financial services": ["Wealth management", "Corporate finance", "Investment service"],
-    "Logistics": ["Logistics service", "Freight forwarding", "Warehousing"],
+    "Insurance companies": ["Insurance Agency", "Insurance Broker", "Commercial Insurance"], 
+    "Financial services": ["Financial Consultant", "Investment service", "Wealth management"],
+    "Logistics": ["Logistics service", "Courier service", "Warehousing"],
     "Printers": ["Commercial Printer", "Print shop", "Sign maker"],
     "High Net Worth companies": ["Investment Bank", "Private Equity", "Asset Management"],
 }
@@ -849,7 +849,7 @@ if "requested_tab" in st.session_state:
 # The 'nav_radio' key in session_state acts as the source of truth.
 
 selected_tab = st.radio(
-    "Navigation", 
+    "", 
     TABS, 
     horizontal=True, 
     label_visibility="collapsed",
@@ -1063,7 +1063,7 @@ if current_tab == "📊 Active Campaign":
             # Sort by Next Action so urgent stuff is top
             df_view = df_view.sort_values(by="Next Action")
                 
-            st.dataframe(df_view[["Business Name", "Sector", "Status", "Contact Name", "Next Action"]], width="stretch")
+            st.dataframe(df_view[["Business Name", "Sector", "Status", "Contact Name", "Next Action"]], use_container_width=True)
             
             # Legacy Actions below table
             lead_choice = st.selectbox("Select Lead to Manage", df_leads["Business Name"].tolist(), key="dash_picker")
@@ -1218,7 +1218,7 @@ if current_tab == " Search & Add":
                         
                         # Pagination Init
                         st.session_state.outscraper_skip = 0
-                        LIMIT_PER_KEYWORD = 15 # Aim for ~50-60 results per batch (across 4 keywords)
+                        LIMIT_PER_KEYWORD = 40 # Increased to ensure ~30+ results after strict filtering
                         
                         for idx, q_str in enumerate(queries):
                             progress_log.caption(f"Outscraper: Scanning across regions for '{q_str}' ({idx+1}/{len(queries)})...")
@@ -1257,13 +1257,9 @@ if current_tab == " Search & Add":
                                 if "Distance" in st.session_state.leads.columns:
                                      st.session_state.leads.sort_values(by="Distance", inplace=True)
                                 
-                                # Strict Limit: Max 50 Results per Page
-                                if len(st.session_state.leads) > 50:
-                                    st.session_state.leads = st.session_state.leads.head(50)
-                                
                                 # Enable Load More for Outscraper
                                 st.session_state.next_page_token = "outscraper_more" 
-                                st.success(f"Outscraper: Showing closest {len(st.session_state.leads)} targets (Merged keywords)")
+                                st.success(f"Outscraper found {len(temp_df)} unique targets! (Merged {len(queries)} keywords)")
                 
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
@@ -1373,7 +1369,7 @@ if current_tab == " Search & Add":
                  if token == "outscraper_more":
                      os_key = st.session_state.user_profile.get("outscraper_key")
                      queries = search_query if isinstance(search_query, list) else [search_query]
-                     LIMIT_PER_KEYWORD = 15
+                     LIMIT_PER_KEYWORD = 40
                      
                      st.session_state.outscraper_skip += LIMIT_PER_KEYWORD
                      current_skip = st.session_state.outscraper_skip
@@ -1396,11 +1392,6 @@ if current_tab == " Search & Add":
                      
                      if new_os_results:
                          new_df = pd.DataFrame(new_os_results)
-                         
-                         # Limit new batch to 50
-                         if len(new_df) > 50:
-                             new_df = new_df.head(50)
-                             
                          # Concat
                          st.session_state.leads = pd.concat([st.session_state.leads, new_df], ignore_index=True)
                          # Dedupe again just in case
@@ -1466,7 +1457,7 @@ if current_tab == " Search & Add":
             
         st.dataframe(
                 df_results[disp_cols],
-                width="stretch"
+                use_container_width=True
         )
     
         
