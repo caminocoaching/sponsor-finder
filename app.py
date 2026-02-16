@@ -959,7 +959,7 @@ if current_tab == "📊 Active Campaign":
         # VIEW TOGGLE
         v_col1, v_col2 = st.columns([1, 4])
         with v_col1:
-            view_mode = st.radio("View Mode", ["Cards", "Calendar", "List Table"], horizontal=True)
+            view_mode = st.radio("View Mode", ["Cards", "Calendar", "List Table"], index=1, horizontal=True)
             
         # FORMATTING HELPERS
         def get_status_color(status):
