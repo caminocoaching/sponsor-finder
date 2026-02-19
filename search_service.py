@@ -38,7 +38,7 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
     
     # Determine Region Code (Outscraper requires ISO 2 codes)
     region_code = "US" # Default to US if unknown
-    loc_upper = location_str.upper()
+    loc_upper = (location_str or "").upper()
     
     # Common Mapping
     if "UK" in loc_upper or "UNITED KINGDOM" in loc_upper or "ENGLAND" in loc_upper or "SCOTLAND" in loc_upper or "WALES" in loc_upper:
@@ -111,8 +111,11 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
         
         if isinstance(data, list):
              # SDK behavior: returns the content of 'data'
-             if len(data) > 0:
+             if len(data) > 0 and isinstance(data[0], list):
                  raw_businesses = data[0]
+             elif len(data) > 0 and isinstance(data[0], dict):
+                 # Single result wrapped in list
+                 raw_businesses = data
         elif isinstance(data, dict) and "data" in data:
              # Raw API behavior fallback
              if len(data["data"]) > 0:
@@ -133,8 +136,10 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             data = response.json() if hasattr(response, 'json') else response
             
             if isinstance(data, list):
-                 if len(data) > 0:
+                 if len(data) > 0 and isinstance(data[0], list):
                      raw_businesses = data[0]
+                 elif len(data) > 0 and isinstance(data[0], dict):
+                     raw_businesses = data
             elif isinstance(data, dict) and "data" in data:
                  if len(data["data"]) > 0:
                      raw_businesses = data["data"][0]
@@ -143,8 +148,20 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
         skipped_dist = 0
         
         for item in raw_businesses:
-            name = item.get("name", "Unknown")
-            if name == "Unknown": continue
+            # Skip None/non-dict items from API response
+            if not item or not isinstance(item, dict):
+                continue
+                
+            name = item.get("name")
+            if not name:
+                # Fallback: try displayName structure (Google Places format)
+                display_name = item.get("displayName")
+                if isinstance(display_name, dict):
+                    name = display_name.get("text")
+            if not name:
+                name = "Unknown"
+            if not name or name == "Unknown":
+                continue
             
             # Post-Verification Filter (CRITICAL)
             lat = item.get("latitude")
@@ -162,8 +179,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 continue
                 
             # [NEW] Sector Cleaning Filter
-            cat_upper = item.get("category", "").upper()
-            name_upper = name.upper()
+            cat_upper = (item.get("category") or "").upper()
+            name_upper = (name or "").upper()
             excluded_terms = ["TAXI", "AIRPORT SHUTTLE", "AMBULANCE", "CHAUFFEUR", "CAB ", "MINICAB", "UBER"]
             
             if any(term in cat_upper for term in excluded_terms) or any(term in name_upper for term in excluded_terms):
@@ -195,6 +212,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
         return mapped_results, None
 
     except Exception as e:
+        import traceback
+        print(f"Outscraper Search Error: {traceback.format_exc()}")
         return {"error": f"Search Failed: {str(e)}"}, None
 
 def get_new_coords(lat, lon, miles, bearing_degrees):
