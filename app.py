@@ -371,8 +371,9 @@ def calendar_contact_card(lead_id):
         else:
             final_script = OBJECTION_SCRIPTS.get(selected_type, fallback_text)
         
-        st.info("Suggested Reply:")
+        st.info("✏️ Edit your reply below, then copy:")
         edited_reply = st.text_area("Edit reply:", value=final_script, height=150, key=f"card_edit_reply_{lead_id}")
+        st.caption("👇 Copy from here:")
         st.code(edited_reply, language=None)
 
 TEMPLATES = {
@@ -921,19 +922,23 @@ def onboarding_screen(user_data, is_edit_mode=False):
             st.error(f"Please fill in the following: {', '.join(missing)}")
 
 # LOGIC FLOW
-# [NEW] Auto-Login Check
+# [UPGRADED] Auto-Login: check query params for session persistence
 if not st.session_state.user_id:
-    # Check query params
     qp = st.query_params.get("user")
     if qp:
          user = db.get_user_by_email(qp)
          if user:
              st.session_state.user_id = user['id']
-             st.toast(f"Restored session for {user['name']}")
     
 if not st.session_state.user_id:
     login_screen()
     st.stop()
+else:
+    # Ensure query param stays set so refresh doesn't lose session
+    _persist_data = db.get_user_profile(st.session_state.user_id)
+    _persist_email = _persist_data.get('email', '') if _persist_data else ''
+    if _persist_email and st.query_params.get('user') != _persist_email:
+        st.query_params['user'] = _persist_email
 
 # Load User
 user_data = db.get_user_profile(st.session_state.user_id)
@@ -1227,24 +1232,18 @@ if current_tab == "📊 Active Campaign":
         if 'dashboard_filter' not in st.session_state:
             st.session_state.dashboard_filter = "All"
         
-        f1, f2, f3 = st.columns(3)
+        f1, f2 = st.columns(2)
         
-        # Filter 1: Action Required (Overdue or Due Today)
-        label_1 = f"⚠️ Action Required ({num_due})"
-        if f1.button(label_1, type="primary" if st.session_state.dashboard_filter == "Action" else "secondary", use_container_width=True):
-             st.session_state.dashboard_filter = "Action"
-        
-        # Filter 2: Active Pipeline (Anything NOT Secured or Lost)
-        # Using the standard statuses: ["Pipeline", "Active", "Secured", "Lost"]
+        # Filter 1: Active Pipeline (Anything NOT Secured or Lost)
         active_mask = ~df_leads['Status'].isin(['Secured', 'Lost'])
         count_active = len(df_leads[active_mask])
-        label_2 = f"🔥 Active Pipeline ({count_active})"
-        if f2.button(label_2, type="primary" if st.session_state.dashboard_filter == "Pipeline" else "secondary", use_container_width=True):
+        label_1 = f"🔥 Active Pipeline ({count_active})"
+        if f1.button(label_1, type="primary" if st.session_state.dashboard_filter == "Pipeline" else "secondary", use_container_width=True):
              st.session_state.dashboard_filter = "Pipeline"
-             
-        # Filter 3: Secured
-        label_3 = f"🏆 Secured Deals ({num_secured})"
-        if f3.button(label_3, type="primary" if st.session_state.dashboard_filter == "Secured" else "secondary", use_container_width=True):
+              
+        # Filter 2: Secured
+        label_2 = f"🏆 Secured Deals ({num_secured})"
+        if f2.button(label_2, type="primary" if st.session_state.dashboard_filter == "Secured" else "secondary", use_container_width=True):
              st.session_state.dashboard_filter = "Secured"
              
         # Reset
@@ -1257,9 +1256,7 @@ if current_tab == "📊 Active Campaign":
         
         # APPLY FILTER
         df_view = df_leads.copy()
-        if st.session_state.dashboard_filter == "Action":
-             df_view = df_view[due_mask]
-        elif st.session_state.dashboard_filter == "Pipeline":
+        if st.session_state.dashboard_filter == "Pipeline":
              df_view = df_view[active_mask]
         elif st.session_state.dashboard_filter == "Secured":
              df_view = df_view[df_leads['Status'] == 'Secured']
@@ -2405,8 +2402,10 @@ Supply a source URL for every data point. Do not guess emails."""
                         else:
                             final_script = OBJECTION_SCRIPTS.get(selected_type, fallback_text)
                             
-                        st.info("Suggested Reply:")
-                        st.code(final_script, language=None)
+                        st.info("✏️ Edit your reply below, then copy:")
+                        edited_reply = st.text_area("Edit Reply:", value=final_script, height=150, key=f"reply_edit_{lead['id']}")
+                        st.caption("👇 Copy from here:")
+                        st.code(edited_reply, language=None)
                         
                         st.divider()
                         st.subheader("📅 Manual Reschedule")
