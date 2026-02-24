@@ -492,6 +492,10 @@ def onboarding_screen(user_data, is_edit_mode=False):
         default_tv = 1 if profile.get('televised') == "Yes" else 0
         default_stream = 1 if profile.get('streamed') == "Yes" else 0
         default_tv_reach = profile.get('tv_reach', '')
+        default_goal = profile.get('goal', '')
+        default_prev_champ = profile.get('prev_champ', '')
+        default_achievements = profile.get('achievements', '')
+        default_team = profile.get('team', '')
     else:
         # Defaults for fresh onboarding
         default_fname = raw_name.split(" ")[0] if " " in raw_name else raw_name
@@ -506,6 +510,10 @@ def onboarding_screen(user_data, is_edit_mode=False):
         default_tv = 0
         default_stream = 0
         default_tv_reach = ""
+        default_goal = ""
+        default_prev_champ = ""
+        default_achievements = ""
+        default_team = ""
         
     c1, c2 = st.columns(2)
     fname = c1.text_input("First Name", value=default_fname)
@@ -528,7 +536,18 @@ def onboarding_screen(user_data, is_edit_mode=False):
     competitors = c3.number_input("Number of Competitors in the paddock", min_value=1, value=default_comp)
     spectators = c4.text_input("Avg. Spectators per Event", value=default_spec)
     
-    st.subheader("3. Media Exposure")
+    st.subheader("3. Season Details (used in your outreach messages)")
+    st.caption("These details auto-fill your outreach templates so you don't have to type them every time.")
+    
+    c_s1, c_s2 = st.columns(2)
+    season_goal_input = c_s1.text_input("Season Goal (e.g. 'Top 5 finish')", value=default_goal, placeholder="e.g. podium finish, championship title")
+    prev_champ_input = c_s2.text_input("Previous Championship", value=default_prev_champ, placeholder="e.g. British Superbikes")
+    
+    c_s3, c_s4 = st.columns(2)
+    achievements_input = c_s3.text_input("Key Achievements", value=default_achievements, placeholder="e.g. 3 wins, fastest lap at Brands Hatch")
+    team_name_input = c_s4.text_input("Team Name", value=default_team, placeholder="e.g. Team Speed Racing")
+    
+    st.subheader("4. Media Exposure")
     c5, c6 = st.columns(2)
     is_tv = c5.selectbox("Is it Televised?", ["No", "Yes"], index=default_tv)
     is_stream = c6.selectbox("Is it Streamed?", ["No", "Yes"], index=default_stream)
@@ -540,7 +559,7 @@ def onboarding_screen(user_data, is_edit_mode=False):
     
     st.divider()
 
-    st.subheader("4. Representation (Parent / Manager Mode)")
+    st.subheader("5. Representation (Parent / Manager Mode)")
     st.caption("Enable this if you are a parent or manager managing this account for the rider.")
     
     # Defaults
@@ -561,7 +580,7 @@ def onboarding_screen(user_data, is_edit_mode=False):
 
     st.divider()
     
-    st.subheader("5. Database Setup")
+    st.subheader("6. Database Setup")
     if airtable_manager.is_configured():
          st.success("✅ Central Database Connected")
     else:
@@ -598,6 +617,10 @@ def onboarding_screen(user_data, is_edit_mode=False):
                 "zip_code": user_zip,
                 "country": user_country, 
                 "onboarding_complete": True,
+                "goal": season_goal_input,
+                "prev_champ": prev_champ_input,
+                "achievements": achievements_input,
+                "team": team_name_input,
                 "rep_mode": is_rep,
                 "rep_name": rep_name,
                 "rep_role": rep_role
@@ -1019,11 +1042,45 @@ if current_tab == "📊 Active Campaign":
         elif view_mode == "Calendar":
             st.caption("📅 Drag and drop isn't supported yet, but here is your schedule.")
             
+            # Message sequence for calendar labels
+            _MSG_SEQUENCE = [
+                "Email: Cold Opener",
+                "LI Msg 1: Connect",
+                "LI Msg 2: Reminder",
+                "LI Msg 3: Opportunities",
+                "LI Msg 4: Value",
+                "LI Msg 5: Unique Offer",
+                "LI Msg 6: Final Nudge"
+            ]
+            
             events = []
             for _, row in df_leads.iterrows():
                 if pd.notnull(row['Next Action']):
+                    # Determine next message step from notes
+                    notes = row.get('Notes', {})
+                    if isinstance(notes, str):
+                        try:
+                            notes = json.loads(notes)
+                        except:
+                            notes = {}
+                    last_step = notes.get('outreach_step', -1) if isinstance(notes, dict) else -1
+                    try:
+                        last_step = int(last_step)
+                    except:
+                        last_step = -1
+                    next_step = last_step + 1
+                    
+                    if next_step < len(_MSG_SEQUENCE):
+                        next_msg_label = _MSG_SEQUENCE[next_step].split(":")[0].strip()
+                    elif last_step >= 0:
+                        next_msg_label = "✅ Sequence Done"
+                    else:
+                        next_msg_label = "Opener"
+                    
+                    cal_title = f"{row['Business Name']} → {next_msg_label}"
+                    
                     events.append({
-                        "title": f"{row['Business Name']} ({row['Status']})",
+                        "title": cal_title,
                         "start": row['Next Action'].strftime("%Y-%m-%d"),
                         "backgroundColor": get_status_color(row['Status']),
                         "borderColor": get_status_color(row['Status']),
@@ -1527,9 +1584,10 @@ if current_tab == "✉️ Outreach Assistant":
     if not all_leads:
         st.info("No leads found. Go to 'Search & Add' to build your list.")
     else:
-        # Prepare lists
-        lead_names = [l["Business Name"] for l in all_leads]
-        lead_ids = [l["id"] for l in all_leads]
+        # Prepare lists — newest leads first (reverse order)
+        reversed_leads = list(reversed(all_leads))
+        lead_names = [l["Business Name"] for l in reversed_leads]
+        lead_ids = [l["id"] for l in reversed_leads]
         
         # Determine current index
         current_idx = 0
@@ -1549,7 +1607,7 @@ if current_tab == "✉️ Outreach Assistant":
         # Update State based on selection
         # (This logic is implicit because selectbox returns the selected name)
         # We just need to synchronize the ID
-        selected_lead_row = next((l for l in all_leads if l["Business Name"] == selected_name), None)
+        selected_lead_row = next((l for l in reversed_leads if l["Business Name"] == selected_name), None)
         if selected_lead_row and selected_lead_row['id'] != st.session_state.selected_lead_id:
              st.session_state.selected_lead_id = selected_lead_row["id"]
              st.rerun()
@@ -1818,7 +1876,23 @@ Supply a source URL for every data point. Do not guess emails."""
                             "LI Msg 6: Final Nudge (Day 28)"
                         ]
                         
-                        tpl = st.selectbox("Template", seq_options)
+                        # Auto-select to the next step based on last sent
+                        lead_notes = lead.get('Notes', {})
+                        if isinstance(lead_notes, str):
+                            try:
+                                lead_notes = json.loads(lead_notes)
+                            except:
+                                lead_notes = {}
+                        last_sent_step = lead_notes.get('outreach_step', -1) if isinstance(lead_notes, dict) else -1
+                        try:
+                            last_sent_step = int(last_sent_step)
+                        except:
+                            last_sent_step = -1
+                        auto_tpl_idx = min(last_sent_step + 1, len(seq_options) - 1)
+                        if auto_tpl_idx < 0:
+                            auto_tpl_idx = 0
+                        
+                        tpl = st.selectbox("Template", seq_options, index=auto_tpl_idx)
                         
                         # Context from Sidebar/DB
                         ctx = {
@@ -1871,9 +1945,23 @@ Supply a source URL for every data point. Do not guess emails."""
                             if st.button("Mark as Sent & Schedule"):
                                 # 2. Update DB using decided date
                                 db.update_lead_status(lead['id'], "Active", final_date)
+                                
+                                # 3. Track which step was sent in notes
+                                current_step_idx = seq_options.index(tpl) if tpl in seq_options else 0
+                                mark_notes = lead.get('Notes', {})
+                                if isinstance(mark_notes, str):
+                                    try:
+                                        mark_notes = json.loads(mark_notes)
+                                    except:
+                                        mark_notes = {}
+                                if not isinstance(mark_notes, dict):
+                                    mark_notes = {}
+                                mark_notes['outreach_step'] = current_step_idx
+                                mark_notes['last_template'] = tpl
+                                db.update_lead_notes(lead['id'], mark_notes)
                             
                                 st.balloons()
-                                st.success(f"Message Logged! 📅 Moved lead to {next_date} on the Calendar.")
+                                st.success(f"Message Logged! 📅 Next follow-up on {final_date}.")
                                 time.sleep(2)
                                 st.rerun()
                     
