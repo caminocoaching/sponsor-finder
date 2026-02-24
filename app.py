@@ -117,14 +117,34 @@ SECTOR_SEARCH_OPTIMIZATIONS = {
     "Fast-growing local businesses": ["Award winning business", "Business of the year", "Fast growing company"],
 }
 
-DISCOVERY_QUESTIONS = [
-    "1. Have you been involved in sponsorship before and how did it go for you?",
-    "2. What would be the ideal outcome for you, from us working together this season?",
-    "3. What would you consider to the most important elements of a sponsorship package?",
-    "4. Do you feel that your staff and team could benefit from our partnership this season?",
-    "5. Do you feel your customers could benefit from our partnership this season?",
-    "6. I think it sounds like we have a fit here, would you agree? Is this a good time for me to put together a draft proposal for your feedback?"
-]
+DISCOVERY_QUESTIONS = {
+    "past_experience": "Have you been involved in sponsorship before — motorsport or otherwise?",
+    "ideal_outcome": "If we worked together and it went really well, what would success look like for you?",
+    "important_elements": "What would be the most important elements of a partnership for you?",
+    "staff_angle": "Could your team or staff benefit from being part of something like this?",
+    "customer_angle": "What about your customers — could they benefit from this partnership?",
+    "local_activation": "We have a round at [nearest circuit] — anything you'd want to do around that?",
+    "budget_signals": "Any budget or timing signals mentioned during the call?"
+}
+
+DISCOVERY_PROBES = {
+    "past_experience": {
+        "yes": "How did that go? What did you get out of it?",
+        "no": "Is there a reason it's not been on your radar, or just never come up?"
+    },
+    "ideal_outcome": {
+        "probe": "Is that more about new customers, brand visibility, staff engagement, entertaining clients — or a mix?"
+    },
+    "important_elements": {
+        "examples": "Logo on the bike/kit, event hospitality, social media mentions, B2B paddock introductions, customer competitions, staff experiences"
+    },
+    "staff_angle": {
+        "yes": "What kind of thing would they get most excited about?"
+    },
+    "customer_angle": {
+        "yes": "Tell me more — what kind of customers are you thinking of?"
+    }
+}
 
 OBJECTION_SCRIPTS = {
     "send email": """That’s absolutely fine, I can certainly send over some details. 
@@ -2403,50 +2423,198 @@ Supply a source URL for every data point. Do not guess emails."""
 
             # --- STAGE 2: DISCOVERY CALL ---
             elif stage == "2. Discovery Call":
-                st.subheader("📞 Call Script & Notes")
-                
-                with st.expander("1️⃣ The Intro (Loose Script)", expanded=True):
-                    st.markdown(f"""
-                    *"Hi [Name], thanks for taking the time to speak."*
-                    
-                    *"As I mentioned, I’m not calling to ask for money today. I’m currently finalizing my partners for the [Championship Name] season, and I’m looking for a {lead['Sector']} partner to align with."*
-                    
-                    *"Before I send any proposals, I want to make sure I’m not wasting your time. I’d love to ask a few quick questions to see if there's actually a fit with what we do. Is that okay?"*
-                    """)
-                
-                st.divider()
-                st.subheader("2️⃣ The Discovery Questions")
+                st.subheader("📞 Discovery Call — Guided Script")
                 
                 # Load existing notes
                 existing_notes = lead.get('Notes', {})
+                if isinstance(existing_notes, str):
+                    try: existing_notes = json.loads(existing_notes)
+                    except: existing_notes = {}
+                if not isinstance(existing_notes, dict): existing_notes = {}
                 
-                with st.form("discovery_form"):
-                    answers = {}
-                    for q in DISCOVERY_QUESTIONS:
-                        qid = q.split(".")[0] # "1", "2" etc
-                        q_text = q.split(".", 1)[1].strip()
-                        # Pre-fill
-                        val = existing_notes.get(f"Q{qid}", "")
-                        answers[f"Q{qid}"] = st.text_area(f"{q_text}", value=val, height=70)
+                contact_name = lead.get('Contact Name', '') or lead['Business Name']
+                first_name = contact_name.split()[0] if contact_name else "there"
+                
+                # ---- AUTO-POPULATED COMPANY INTEL ----
+                with st.expander("🔍 Pre-Call Intel (Auto-Populated)", expanded=True):
+                    st.caption("Review this before the call — reference something specific early to prove you did your homework.")
                     
-                    st.divider()
-                    st.markdown("**3️⃣ Closing the Call**")
-                    st.markdown("""
-                    *"That’s really helpful, thanks. Based on what you’ve said about [Goal], I actually think we could do something quite interesting around [Idea]."*
-                    
-                    *"I’m going to put together a specific 1-page proposal for you. I’ll send it over on Tuesday. When would be the best time to run through it for 10 minutes?"*
-                    """)
-                    
-                    if st.form_submit_button("💾 Save Call Notes"):
-                        # Save to DB
-                        existing_notes.update(answers) # Merge
-                        db.update_lead_notes(lead['id'], existing_notes)
-                        st.success("Notes saved to database!")
-
+                    intel_c1, intel_c2 = st.columns(2)
+                    with intel_c1:
+                        st.markdown(f"**Company:** {lead['Business Name']}")
+                        st.markdown(f"**Sector:** {lead.get('Sector', '—')}")
+                        st.markdown(f"**Contact:** {contact_name}")
+                        if lead.get('Website'):
+                            st.markdown(f"🌐 [{lead['Website']}]({lead['Website']})")
+                    with intel_c2:
+                        desc = existing_notes.get('description', '')
+                        size = existing_notes.get('company_size', '')
+                        owner = existing_notes.get('owner', '')
+                        if desc:
+                            st.markdown(f"**About:** {desc[:200]}")
+                        if size:
+                            st.markdown(f"**Est. Size:** {size}")
+                        if owner:
+                            st.markdown(f"**Owner/Contact:** {owner}")
                         
-                if st.button("Mark Call Complete"):
-                     # Move to Proposal Stage logically
-                     st.info("Call Logged. Move to 'Proposal' stage to generate your deck.")
+                        social = existing_notes.get('social_links', {})
+                        if isinstance(social, dict) and social:
+                            links = []
+                            if social.get('linkedin'): links.append(f"[LinkedIn]({social['linkedin']})")
+                            if social.get('facebook'): links.append(f"[Facebook]({social['facebook']})")
+                            if social.get('instagram'): links.append(f"[Instagram]({social['instagram']})")
+                            if links:
+                                st.markdown("**Social:** " + " • ".join(links))
+                    
+                    homework_notes = st.text_area(
+                        "✏️ Your homework notes (2-3 things you noticed about their business)",
+                        value=existing_notes.get('homework_notes', ''),
+                        height=80, 
+                        placeholder="e.g. Just opened a new site, posted about team expansion on LinkedIn, competitor sponsors a BSB team..."
+                    )
+                
+                st.divider()
+                
+                # ---- 1. THE WARM OPEN ----
+                with st.expander("1️⃣ The Warm Open (Script)", expanded=False):
+                    rep_mode = user_profile.get("rep_mode", False)
+                    rep_name = user_profile.get("rep_name", "")
+                    
+                    if rep_mode and rep_name:
+                        intro_line = f"I'm {rep_name}, calling on behalf of {rider_name}"
+                    else:
+                        intro_line = f"I'm {rider_name}"
+                    
+                    st.markdown(f"""
+*"Hi {first_name}, thanks so much for making the time — I really appreciate it."*
+
+*"{intro_line} and we're currently in the final stages of putting together our partner group for the {championship} season."*
+
+*"I want to be straight with you — this call isn't about asking for money. Before I even think about putting a proposal together, I want to make sure what we do actually makes sense for your business. So I'd love to ask you a few questions if that's okay — it'll only take about 10 minutes."*
+
+⏸️ **Wait for "yes" before continuing — this consent creates buy-in**
+""")
+                
+                st.divider()
+                
+                # ---- 2. DISCOVERY QUESTIONS ----
+                st.subheader("2️⃣ Discovery Questions")
+                st.caption("Work through these conversationally. Every answer is a building block for the proposal.")
+                
+                with st.form("discovery_form_v2"):
+                    answers = {}
+                    
+                    # Q1 — Past Experience
+                    st.markdown("---")
+                    st.markdown("**Q1 — Past Experience**")
+                    st.markdown('*"Have you ever been involved in sponsorship before, whether motorsport or anything else?"*')
+                    st.caption("🎯 Listen for: what worked, what didn't, what they wish they'd got")
+                    st.caption("If yes → *'How did that go?'* / If no → *'Is there a reason, or just never come up?'*")
+                    answers['past_experience'] = st.text_area("Their answer:", value=existing_notes.get('past_experience', ''), height=70, key="dq1")
+                    
+                    # Q2 — Ideal Outcome
+                    st.markdown("---")
+                    st.markdown("**Q2 — Ideal Outcome** *(This becomes the headline of the proposal)*")
+                    st.markdown('*"If we did work together this season and it went really well — what would that actually look like for you?"*')
+                    st.caption("🎯 Listen for: their primary motivation. Probe: *'New customers, visibility, staff engagement, or entertaining clients?'*")
+                    answers['ideal_outcome'] = st.text_area("Their answer:", value=existing_notes.get('ideal_outcome', ''), height=70, key="dq2")
+                    
+                    # Q3 — What Matters Most
+                    st.markdown("---")
+                    st.markdown("**Q3 — Most Important Elements**")
+                    st.markdown('*"If you were putting a package together, what would be the most important elements for you?"*')
+                    st.caption("🎯 Examples if stuck: logo on bike/kit, event hospitality, social media, B2B paddock intros, customer competitions, staff experiences")
+                    answers['important_elements'] = st.text_area("Their answer:", value=existing_notes.get('important_elements', ''), height=70, key="dq3")
+                    
+                    # Q4 — Staff Angle
+                    st.markdown("---")
+                    st.markdown("**Q4 — Staff & Team Benefit**")
+                    st.markdown('*"Do you think your team could get something out of this — coming to a race, being part of something exciting?"*')
+                    st.caption("🎯 Listen for: internal buy-in. If yes → *'What would they get most excited about?'*")
+                    answers['staff_angle'] = st.text_area("Their answer:", value=existing_notes.get('staff_angle', ''), height=70, key="dq4")
+                    
+                    # Q5 — Customer Angle
+                    st.markdown("---")
+                    st.markdown("**Q5 — Customer Benefit**")
+                    st.markdown('*"What about your customers — could you see using this as a promotion, loyalty reward, or memorable experience?"*')
+                    st.caption("🎯 Listen for: commercial use case. If yes → *'Tell me more — what kind of customers?'*")
+                    answers['customer_angle'] = st.text_area("Their answer:", value=existing_notes.get('customer_angle', ''), height=70, key="dq5")
+                    
+                    # Q6 — Local Activation
+                    st.markdown("---")
+                    st.markdown("**Q6 — Local Round / Activation**")
+                    st.markdown('*"We have a round at [nearest circuit] this season. Is there anything you would want to do around that?"*')
+                    st.caption("🎯 Listen for: activation appetite. If they light up, this is the centrepiece of the proposal.")
+                    answers['local_activation'] = st.text_area("Their answer:", value=existing_notes.get('local_activation', ''), height=70, key="dq6")
+                    
+                    # Q7 — Budget Signals
+                    st.markdown("---")
+                    st.markdown("**Q7 — Budget & Timing Signals**")
+                    st.caption("Not a question you ask directly — just note anything they mention about budgets, timing, or decision process.")
+                    answers['budget_signals'] = st.text_area("Notes:", value=existing_notes.get('budget_signals', ''), height=70, key="dq7")
+                    
+                    st.markdown("---")
+                    
+                    # Follow-up logistics
+                    log_c1, log_c2 = st.columns(2)
+                    with log_c1:
+                        proposal_date = st.text_input("📅 Proposal send date:", value=existing_notes.get('proposal_send_date', ''), placeholder="e.g. Tuesday 4th March", key="dq_date")
+                    with log_c2:
+                        next_call = st.text_input("📞 Next call booked for:", value=existing_notes.get('next_call_date', ''), placeholder="e.g. Thursday 6th March 2pm", key="dq_call")
+                    
+                    answers['proposal_send_date'] = proposal_date
+                    answers['next_call_date'] = next_call
+                    answers['homework_notes'] = homework_notes
+                    
+                    if st.form_submit_button("💾 Save Call Notes", type="primary"):
+                        existing_notes.update(answers)
+                        db.update_lead_notes(lead['id'], existing_notes)
+                        st.success("✅ All answers saved — ready to build the proposal!")
+                
+                st.divider()
+                
+                # ---- 3. THE SOFT CLOSE ----
+                with st.expander("3️⃣ Closing The Call (Script)", expanded=False):
+                    ideal = existing_notes.get('ideal_outcome', '[their goal]')
+                    p_date = existing_notes.get('proposal_send_date', '[specific day]')
+                    st.markdown(f"""
+*"That's been really useful, thank you. Based on what you've said about {ideal}, I've actually got a couple of ideas already about how we could make that work."*
+
+*"I'll put something together and send it over by **{p_date}**. It won't be long, just the key points so you can give me honest feedback on it."*
+
+*"When would work for a quick 10-minute call to go through it?"*
+
+⚡ **Book it before you hang up**
+""")
+                
+                st.divider()
+                
+                # ---- 4. NOTESHEET SUMMARY ----
+                with st.expander("4️⃣ Call Summary", expanded=False):
+                    st.markdown("### Call Notesheet")
+                    summary_data = {
+                        "Sponsorship experience": existing_notes.get('past_experience', '—'),
+                        "Ideal outcome": existing_notes.get('ideal_outcome', '—'),
+                        "Most important elements": existing_notes.get('important_elements', '—'),
+                        "Staff benefit angle": existing_notes.get('staff_angle', '—'),
+                        "Customer benefit angle": existing_notes.get('customer_angle', '—'),
+                        "Local activation ideas": existing_notes.get('local_activation', '—'),
+                        "Budget signals": existing_notes.get('budget_signals', '—'),
+                        "Proposal send date": existing_notes.get('proposal_send_date', '—'),
+                        "Next call booked": existing_notes.get('next_call_date', '—'),
+                    }
+                    for label, val in summary_data.items():
+                        st.markdown(f"**{label}:** {val}")
+                
+                st.divider()
+                st.caption("💡 **Golden Rule:** The less you talk, the better the proposal will be. Ask, listen, take notes.")
+                
+                if st.button("✅ Mark Call Complete → Move to Proposal", type="primary"):
+                    db.update_lead_status(lead['id'], "Discovery Call")
+                    st.success("Call logged. Switch to 'Proposal' stage to generate your deck.")
+                    time.sleep(1)
+                    st.rerun()
+
 
                 
             elif stage == "3. Proposal":
@@ -2464,15 +2632,23 @@ Supply a source URL for every data point. Do not guess emails."""
                 # Deep Discovery Context
                 disc_context = "**Deep Discovery Findings (Client Voice):**\n"
                 has_answers = False
-                for i, question_text in enumerate(DISCOVERY_QUESTIONS):
-                    key = f"Q{i+1}"
-                    answer = l_notes.get(key, "").strip()
+                disc_keys = {
+                    "past_experience": "Sponsorship Experience",
+                    "ideal_outcome": "Ideal Outcome",
+                    "important_elements": "Most Important Elements",
+                    "staff_angle": "Staff Benefit",
+                    "customer_angle": "Customer Benefit",
+                    "local_activation": "Local Activation",
+                    "budget_signals": "Budget Signals"
+                }
+                for key, label in disc_keys.items():
+                    answer = l_notes.get(key, "").strip() if isinstance(l_notes.get(key), str) else ""
                     if answer:
                         has_answers = True
-                        disc_context += f"- **Goal ({key}):** {question_text}\n  - **Client Said:** \"{answer}\"\n"
+                        disc_context += f"- **{label}:** \"{answer}\"\n"
                 
                 if not has_answers:
-                     st.warning("⚠️ No Discovery Data found. Using generic placeholders.")
+                     st.warning("⚠️ No Discovery Data found. Complete the Discovery Call first for best results.")
 
                 # --- STEP 1: PROPOSAL WORKFLOW (BLANKED) ---
                 st.markdown("### 📝 Proposal Generator")
