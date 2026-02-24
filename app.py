@@ -355,9 +355,36 @@ def mock_search_places(location, radius, sector, mode="sector"):
             })
     return pd.DataFrame(mock_data)
 
-def generate_message(template_type, business_name, rider_name, sector, context_answers=None, town="MyTown", championship="Championship", extra_context={}):
+def _format_contact_name(full_name, template_type):
+    """Format contact name based on message type.
+    - Initial messages (Email opener, LI Msg 1): formal 'Mr/Mrs LastName'
+    - Follow-up messages (LI Msg 2+): first name only
+    """
+    if not full_name or full_name.strip() == "":
+        return "Mr/Mrs [Name]"  # Placeholder if no name set
+    
+    name_parts = full_name.strip().split()
+    first_name = name_parts[0] if name_parts else full_name
+    last_name = name_parts[-1] if len(name_parts) > 1 else ""
+    
+    # Initial contact messages: formal addressing
+    is_initial = template_type in ("Email: Cold Opener", "LI Msg 1: Connect")
+    
+    if is_initial:
+        if last_name:
+            return f"Mr/Mrs {last_name}"
+        else:
+            return f"Mr/Mrs {first_name}"
+    else:
+        # Follow-up messages: use first name (they know you now)
+        return first_name
+
+def generate_message(template_type, business_name, rider_name, sector, context_answers=None, town="MyTown", championship="Championship", extra_context={}, contact_name=""):
     template = TEMPLATES.get(template_type, "")
     hook = get_sector_hook(sector)
+    
+    # Format contact name based on message type (formal vs first-name)
+    formatted_name = _format_contact_name(contact_name, template_type)
     
     msg = template.replace("[Business Name]", business_name)\
                   .replace("[Rider Name]", rider_name)\
@@ -365,8 +392,8 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
                   .replace("[Town]", town)\
                   .replace("[Championship Name]", championship)\
                   .replace("[Sector Hook]", hook)\
-                  .replace("[Contact Name/Business Name]", "Mr/Ms [Name]")\
-                  .replace("[Contact Name]", "Mr/Ms [Name]")\
+                  .replace("[Contact Name/Business Name]", formatted_name)\
+                  .replace("[Contact Name]", formatted_name)\
                   .replace("[Current Year]", "2026")
                   
     msg = msg.replace("[Season Goal]", extra_context.get("goal", ""))\
@@ -1857,11 +1884,17 @@ Supply a source URL for every data point. Do not guess emails."""
                          current_contact = lead.get('Contact Name', '')
                          new_name = st.text_input("Found Contact Name", value=current_contact, key=f"contact_name_input_{lead['id']}")
                          if st.button("Update Contact"):
-                             st.toast("Contact Saved (simulated)")
+                             if new_name:
+                                 db.update_lead_contact(lead['id'], new_name)
+                                 st.toast(f"✅ Contact updated to: {new_name}")
+                                 time.sleep(0.5)
+                                 st.rerun()
+                             else:
+                                 st.warning("Please enter a contact name first.")
                     
                     if c_mode == "Draft Opener":
                         st.subheader("Outreach Message")
-                        target_name = new_name if new_name else "Mr/Ms [Name]"
+                        contact_name_raw = new_name if new_name else ""
                         
                         # Use saved town from profile
                         town = saved_town 
@@ -1907,8 +1940,9 @@ Supply a source URL for every data point. Do not guess emails."""
                             "rep_role": user_profile.get("rep_role", "")
                         }
                         
-                        # Town extraction
-                        draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx).replace("Mr/Ms [Name]", target_name).replace("[Contact Name]", target_name)
+                        # Generate message with automatic name formatting
+                        # Initial messages use Mr/Mrs LastName, follow-ups use first name
+                        draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx, contact_name=contact_name_raw)
                         
                         final_msg = st.text_area("Edit Message:", value=draft, height=250)
                         
