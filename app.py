@@ -22,52 +22,99 @@ db.init_db()
 # --- DATA & CONSTANTS ---
 SECTORS = [
     "in your industry sector",
-    "Engineering & manufacturing",
-    "Transport & haulage",
+    # --- ENDEMIC (closest to motorsport) ---
     "Motorcycle dealers",
     "Motorcycle parts & accessories",
+    "Automotive aftermarket",
     "Accident management & vehicle services",
-    "Building supplies",
-    "Food & beverage brands",
-    "Tech & telecoms (optional)",
-    "Insurance companies",
-    "Financial services",
-    "App developers",
+    # --- ENGINEERING & INDUSTRIAL ---
+    "Engineering & manufacturing",
+    "Transport & haulage",
     "Logistics",
-    "Printers",
-    "High Net Worth companies",
+    "Building supplies & construction",
+    # --- HIGH-VALUE NON-ENDEMIC (PDF sectors) ---
+    "Enterprise AI & SaaS",
+    "Online gaming & casinos",
+    "Green tech & renewable energy",
+    "Fintech & digital banking",
+    "Luxury goods & lifestyle",
+    # --- SERVICE / LOCAL ---
+    "Food & beverage brands",
+    "Craft brewery & distillery",
+    "Insurance companies",
+    "Financial services & wealth management",
+    "Property & real estate",
+    "Legal services",
+    "Recruitment & staffing",
+    "Fitness & wellness",
+    "Printers & signage",
+    # --- DISCOVERY ---
+    "Companies already sponsoring motorsport",
+    "Fast-growing local businesses",
     "Other (type your own)"
 ]
 
 SECTOR_HOOKS = {
     "Construction": "building a legacy and solid foundations",
+    "Building": "building a legacy and solid foundations",
     "Engineering": "precision, performance, and technical excellence",
     "Transport": "logistics, speed, and moving forward",
     "Motorcycle": "passion for the sport and the machine",
+    "Automotive": "performance, engineering and the thrill of the track",
     "Accident": "safety, recovery, and getting back on track",
     "Food": "fueling performance and great taste",
+    "Craft": "craftsmanship, quality and local pride",
     "Financial": "calculated risk and high rewards",
+    "Fintech": "innovation, trust and global ambition",
     "Logistics": "delivering results on time, every time",
     "Insurance": "protection and peace of mind at high speed",
     "Tech": "innovation and data-driven performance",
+    "Enterprise": "pushing the boundaries of what technology can do",
+    "Gaming": "adrenaline, competition and the thrill of the win",
+    "Green": "sustainable innovation and a cleaner future",
+    "Luxury": "exclusivity, prestige and premium experiences",
+    "Property": "building value and long-term investment",
+    "Legal": "precision, strategy and winning results",
+    "Recruitment": "finding the best talent and backing winners",
+    "Fitness": "peak performance, discipline and pushing limits",
+    "Printers": "visibility, branding and making an impact",
+    "Fast-growing": "ambition, momentum and standing out from the crowd",
+    "Companies already": "proven belief in motorsport as a marketing platform",
     "Other": "excellence and high performance"
 }
 
 # [NEW] Optimized Search Queries for Google Places API
 # Maps the user-friendly dropdown name to a LIST of terms to search in parallel
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    "Transport & haulage": ["Haulage companies", "Logistics companies", "Freight forwarding service"],
-    "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
+    # --- ENDEMIC ---
     "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
     "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
+    "Automotive aftermarket": ["Car parts supplier", "Auto accessories", "Performance parts", "Vehicle wrapping"],
     "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
-    "Building supplies": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction supply"],
-    "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food"],
-    "Insurance companies": ["Commercial Insurance", "Insurance Broker", "Business Insurance"], 
-    "Financial services": ["Wealth management", "Corporate finance", "Investment service"],
+    # --- INDUSTRIAL ---
+    "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
+    "Transport & haulage": ["Haulage companies", "Logistics companies", "Freight forwarding service"],
     "Logistics": ["Logistics service", "Freight forwarding", "Warehousing"],
-    "Printers": ["Commercial Printer", "Print shop", "Sign maker"],
-    "High Net Worth companies": ["Investment Bank", "Private Equity", "Asset Management"],
+    "Building supplies & construction": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction company"],
+    # --- HIGH-VALUE NON-ENDEMIC ---
+    "Enterprise AI & SaaS": ["Software company", "IT services company", "Technology consulting", "SaaS company"],
+    "Online gaming & casinos": ["Online casino", "Gaming company", "Betting company", "Esports"],
+    "Green tech & renewable energy": ["Solar panel installer", "Renewable energy company", "Electric vehicle charging", "Environmental services"],
+    "Fintech & digital banking": ["Fintech", "Payment processing", "Digital bank", "Cryptocurrency exchange"],
+    "Luxury goods & lifestyle": ["Luxury watch retailer", "Premium car dealer", "Private members club", "Luxury brand"],
+    # --- SERVICE / LOCAL ---
+    "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food", "Energy drink"],
+    "Craft brewery & distillery": ["Craft brewery", "Microbrewery", "Distillery", "Gin distillery"],
+    "Insurance companies": ["Commercial Insurance", "Insurance Broker", "Business Insurance"],
+    "Financial services & wealth management": ["Wealth management", "Corporate finance", "Investment service", "Financial advisor"],
+    "Property & real estate": ["Estate agent", "Property developer", "Commercial property", "Property investment"],
+    "Legal services": ["Law firm", "Solicitor", "Corporate lawyer", "Commercial law firm"],
+    "Recruitment & staffing": ["Recruitment agency", "Staffing agency", "Executive recruitment", "HR consulting"],
+    "Fitness & wellness": ["Gym", "Personal trainer", "Sports nutrition", "Fitness brand"],
+    "Printers & signage": ["Commercial Printer", "Print shop", "Sign maker", "Vehicle graphics"],
+    # --- DISCOVERY MODES ---
+    "Companies already sponsoring motorsport": ["Motorsport sponsor", "Racing team sponsor", "Motorcycle racing sponsor"],
+    "Fast-growing local businesses": ["Award winning business", "Business of the year", "Fast growing company"],
 }
 
 DISCOVERY_QUESTIONS = [
@@ -137,123 +184,325 @@ def delete_confirmation_dialog(lid, business_name):
         if st.button("Cancel"):
             st.rerun()
 
+@st.dialog("Contact Card", width="large")
+def calendar_contact_card(lead_id):
+    """Opens a contact card with the current message stage, reply handler, and profile URL."""
+    # Load lead data
+    leads = db.get_leads(st.session_state.user_id)
+    lead = None
+    for l in leads:
+        if l['id'] == lead_id:
+            lead = l
+            break
+    
+    if not lead:
+        st.error("Contact not found.")
+        return
+    
+    # Load user profile context
+    user_data_card = db.get_user_profile(st.session_state.user_id)
+    user_profile_card = user_data_card.get('profile', {})
+    rider_name_card = user_data_card['name']
+    town_card = user_profile_card.get('town', '')
+    championship_card = user_profile_card.get('championship', 'Unknown')
+    
+    ctx = {
+        "goal": user_profile_card.get('goal', ''),
+        "prev_champ": user_profile_card.get('prev_champ', ''),
+        "achievements": user_profile_card.get('achievements', ''),
+        "audience": user_profile_card.get('audience', ''),
+        "tv": user_profile_card.get('tv', '') if user_profile_card.get('televised') == "Yes" else "N/A",
+        "team": user_profile_card.get('team', ''),
+        "rep_mode": user_profile_card.get("rep_mode", False),
+        "rep_name": user_profile_card.get("rep_name", ""),
+        "rep_role": user_profile_card.get("rep_role", "")
+    }
+    
+    # Parse notes
+    lead_notes = lead.get('Notes', {})
+    if isinstance(lead_notes, str):
+        try: lead_notes = json.loads(lead_notes)
+        except: lead_notes = {}
+    if not isinstance(lead_notes, dict): lead_notes = {}
+    
+    contact_name = lead.get('Contact Name', '') or ''
+    contact_url = lead_notes.get('contact_url', '')
+    salutation = lead_notes.get('salutation', 'Mr')
+    
+    # Determine current sequence step
+    seq_options = [
+        "Email: Cold Opener",
+        "LI Msg 1: Connect",
+        "LI Msg 2: Reminder (Day 2)",
+        "LI Msg 3: Opportunities (Day 7)",
+        "LI Msg 4: Value (Day 14)",
+        "LI Msg 5: Unique Offer (Day 21)",
+        "LI Msg 6: Final Nudge (Day 28)"
+    ]
+    
+    last_sent_step = lead_notes.get('outreach_step', -1)
+    try: last_sent_step = int(last_sent_step)
+    except: last_sent_step = -1
+    current_step_idx = min(last_sent_step + 1, len(seq_options) - 1)
+    if current_step_idx < 0: current_step_idx = 0
+    
+    is_sequence_done = last_sent_step >= len(seq_options) - 1
+    
+    # --- HEADER ---
+    st.markdown(f"### {contact_name or lead['Business Name']}")
+    head_c1, head_c2 = st.columns([2, 1])
+    with head_c1:
+        st.caption(f"🏢 {lead['Business Name']}  •  {lead.get('Sector', '')}")
+        if is_sequence_done:
+            st.success("✅ Full sequence complete")
+        else:
+            st.info(f"📍 Stage: **{seq_options[current_step_idx]}**")
+    with head_c2:
+        st.caption(f"Status: **{lead.get('Status', 'Pipeline')}**")
+        if lead.get('Next Action'):
+            st.caption(f"📅 Follow-up: {lead.get('Next Action', '')}")
+    
+    # --- PROFILE URL ---
+    if contact_url:
+        st.markdown(f"🔗 **[Open Profile → Message Now]({contact_url})**")
+    else:
+        st.caption("⚠️ No profile URL saved — add one in the Outreach Assistant")
+    
+    st.divider()
+    
+    # --- TAB: Message / Reply ---
+    card_tab = st.radio("Mode", ["Draft Message", "Handle Reply"], horizontal=True, key=f"card_mode_{lead_id}")
+    
+    if card_tab == "Draft Message" and not is_sequence_done:
+        current_template = seq_options[current_step_idx]
+        
+        # Generate the message
+        draft = generate_message(
+            current_template, lead['Business Name'], rider_name_card, lead.get('Sector', ''),
+            town=town_card, championship=championship_card, extra_context=ctx,
+            contact_name=contact_name, salutation=salutation
+        )
+        
+        final_msg = st.text_area("Message:", value=draft, height=200, key=f"card_msg_{lead_id}")
+        
+        st.caption("👇 Click the Copy icon in the top right of the box below")
+        st.code(final_msg, language=None)
+        
+        # Schedule next follow-up
+        def_days = 2
+        if "Msg 2" in current_template: def_days = 5
+        elif "Msg 3" in current_template: def_days = 7
+        elif "Msg 4" in current_template: def_days = 7
+        elif "Msg 5" in current_template: def_days = 7
+        elif "Msg 6" in current_template: def_days = 30
+        
+        auto_date = datetime.now() + timedelta(days=def_days)
+        
+        fc1, fc2 = st.columns([2, 1])
+        with fc1:
+            use_manual_cal = st.checkbox("Change follow-up date?", value=False, key=f"card_manual_{lead_id}")
+            if use_manual_cal:
+                final_date_obj = st.date_input("Follow-up date", value=auto_date, key=f"card_date_{lead_id}")
+                final_date = final_date_obj.strftime("%Y-%m-%d")
+            else:
+                final_date = auto_date.strftime("%Y-%m-%d")
+                st.caption(f"📅 Next follow-up: **{final_date}** (+{def_days} days)")
+        
+        with fc2:
+            st.write("")
+            if st.button("✅ Sent & Scheduled", type="primary", key=f"card_sent_{lead_id}"):
+                st.balloons()
+                
+                # Update status
+                db.update_lead_status(lead_id, "Active", final_date)
+                
+                # Update notes with step + salutation + URL
+                lead_notes['outreach_step'] = current_step_idx
+                lead_notes['last_template'] = current_template
+                lead_notes['salutation'] = salutation
+                if contact_url:
+                    lead_notes['contact_url'] = contact_url
+                db.update_lead_notes(lead_id, lead_notes)
+                
+                st.success(f"🎉 Done! Next follow-up: {final_date}")
+                time.sleep(2)
+                st.rerun()
+    
+    elif card_tab == "Draft Message" and is_sequence_done:
+        st.info("🏁 You’ve completed the full 6-message sequence with this contact.")
+        st.markdown("**Next steps:**")
+        st.markdown("- Schedule a discovery call")
+        st.markdown("- Move to Proposal stage")
+        st.markdown("- Or mark as Not Interested")
+        
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            if st.button("📞 Move to Discovery", key=f"card_disc_{lead_id}"):
+                db.update_lead_status(lead_id, "Discovery Call")
+                st.rerun()
+        with fc2:
+            if st.button("📋 Move to Proposal", key=f"card_prop_{lead_id}"):
+                db.update_lead_status(lead_id, "Proposal")
+                st.rerun()
+        with fc3:
+            if st.button("❌ Not Interested", key=f"card_ni_{lead_id}"):
+                db.update_lead_status(lead_id, "Not Interested")
+                st.rerun()
+    
+    else:
+        # Handle Reply mode
+        st.subheader("Coach Mode")
+        reply = st.text_input("Paste their reply:", key=f"card_reply_{lead_id}")
+        
+        detected_key = "fallback"
+        if reply:
+            detected_key = handle_objection(reply)
+            st.caption(f"Detected Intent: {detected_key.title()}")
+        
+        options = list(OBJECTION_SCRIPTS.keys()) + ["fallback"]
+        try: idx = options.index(detected_key)
+        except: idx = len(options) - 1
+        
+        selected_type = st.selectbox("Response Strategy", options, index=idx, key=f"card_strat_{lead_id}")
+        
+        fallback_text = "I see. Could you clarify if the hesitation is around timing or the concept itself?"
+        if selected_type == "fallback":
+            final_script = fallback_text
+        else:
+            final_script = OBJECTION_SCRIPTS.get(selected_type, fallback_text)
+        
+        st.info("Suggested Reply:")
+        edited_reply = st.text_area("Edit reply:", value=final_script, height=150, key=f"card_edit_reply_{lead_id}")
+        st.code(edited_reply, language=None)
+
 TEMPLATES = {
     "Email: Cold Opener": """Good morning [Contact Name],
 
-I wanted to introduce myself. My name is [Rider Name] and I am based in [Town] close to your head office.
+My name is [Rider Name] and I am based in [Town], close to your head office.
 
-I am racing this season in the [Championship Name] and I wondered if you have ever considered motorsport to promote your brand?
+I am racing this season in the [Championship Name]. Here's why I'm reaching out:
 
-There are a number of companies in the [Sector] sector that have successfully promoted themselves in motorsport over the past season (usually focusing on [Sector Hook]), and I want to offer you an opportunity to get involved.
+Companies in the [Sector] sector are using motorsport to get in front of [Audience Size]+ fans per event — positioning themselves around [Sector Hook]. And most of them started with a single conversation.
 
-Is this something you have considered or would be open to discussing?
+I have one partnership spot left that would be a natural fit for [Business Name].
 
-I look forward to hearing from you soon,
+Would you be open to a 10-minute call this week to see if it makes sense?
+
+No pitch. No pressure. Just a conversation.
 
 Best regards,
 [Rider Name]""",
 
     "LI Msg 1: Connect": """Hi [Contact Name],
 
-I hope you’re doing well! Thank you for connecting with me here—it’s great to expand my network with forward-thinking professionals like yourself.
+I’m currently competing in [Championship Name] — [Audience Size]+ fans per event, live coverage, the works.
 
-I’m reaching out as I’m passionate about partnering with businesses that see the unique value of promoting their brand through motorsport—a fast-paced, technologically advanced sport that embodies precision, performance, and innovation.
+I noticed [Business Name] operates in the [Sector] space. Here’s why that matters:
 
-I’m currently competing in [Championship Name], and I believe we could be a fantastic fit because [Sector Hook] companies often need to stand out locally.
+Your competitors are starting to use motorsport to stand out. The ones that get in early own the category. The ones that wait… blend in.
 
-I’d love the opportunity to explore how we can work together to help [Business Name] stand out from the competition in a way that’s both impactful and exciting. Could we arrange a time to speak and discuss the possibilities?
+I have a few partnership options specifically for [Sector Hook] businesses that want to be seen as the go-to in their market.
 
-Looking forward to hearing your thoughts!
+Would it be worth a quick chat to see if there’s a fit?
 
-Warm regards,
 [Rider Name]""",
 
     "LI Msg 2: Reminder (Day 2)": """Hi [Contact Name],
 
-I just wanted to follow up and learn more about [Business Name]. Have you worked with sponsorships before, or is this something you’ve considered exploring?
+Quick follow-up — I know messages pile up.
 
-Motorsport partnerships offer unique benefits, from brand visibility at [Audience Size] events to tailored engagement opportunities. I’d love to hear if this could align with your goals.
+Here’s the short version: I race in the [Championship Name]. Our partners get their brand in front of [Audience Size]+ people per event.
 
-Looking forward to your thoughts!
+One question: Has [Business Name] ever explored sponsorship as a way to reach new customers, or is it completely new territory?
 
-Best regards,
+Either way, I’ve got some ideas that might surprise you.
+
 [Rider Name]""",
 
-    "LI Msg 3: Opportunities (Day 7)": """Good morning [Contact Name],
+    "LI Msg 3: Opportunities (Day 7)": """[Contact Name],
 
-I hope you’re doing well!
+I wanted to share exactly what our [Current Year] partners are getting — because it’s not just a logo on a bike.
 
-I wanted to update you on my plans for the [Current Year] season. This year, I’m focusing solely on [Championship Name], allowing me to concentrate fully on achieving [Season Goal].
+This season I’m focusing solely on [Championship Name], allowing me to concentrate fully on achieving [Season Goal]. Last season in [Previous Champ]: [Achievements].
 
-Last season in [Previous Champ] was a fantastic step forward, with highlights like [Achievements]. This year, I’ve secured exciting opportunities for my business partners, including:
+Here’s what’s on the table for partners:
 
-1. Sales Team Incentives – Competition for a VIP race weekend experience.
-2. Meet & Greet – Bringing the race bike to your office for a motivational session with your team.
-3. Exclusive Trackside Advertising – High-visibility placements at events with [Audience Size] attendees, streamed on YouTube or televised to [TV Viewers] viewers.
+1. VIP Race Day Experience — Use it as a sales incentive, client reward, or team-building event.
+2. On-Site Meet & Greet — I bring the race bike to your office. Your team gets a story they’ll tell for months.
+3. Trackside Branding — [Audience Size] attendees per event + streamed to [TV Viewers] viewers. That’s eyeballs you can’t buy with a Google ad.
 
-If these align with your goals, I’d love to discuss further. Let me know if you’d like more details!
+Most businesses that say “yes” tell me they wish they’d done it sooner.
 
-Best regards,
+Worth 10 minutes to explore?
+
 [Rider Name]""",
 
     "LI Msg 4: Value (Day 14)": """Hi [Contact Name],
 
-I hope this message finds you well!
+I’ll keep this short.
 
-I’ve been thinking about how [Business Name] could benefit from motorsport sponsorship. It’s a unique way to connect with audiences and enhance your brand, offering:
+Three reasons [Business Name] should consider a motorsport partnership:
 
-• Direct Engagement – Through events and digital platforms.
-• Brand Alignment – With high-performance and innovation.
-• Memorable Experiences – For your team or clients.
+1. Your competitors aren’t doing it yet. First-mover advantage is real.
+2. [Audience Size]+ engaged fans per event who actually pay attention (not scrolling past like a social media ad).
+3. You get hospitality, content, and brand placement — all in one package.
 
-Have sponsorships been part of your strategy before? If not, I’d be happy to share insights on how this could work for you.
+The question isn’t “can we afford to do this?” — it’s “can we afford NOT to, when our competitors eventually will?”
 
-Looking forward to hearing your thoughts when you have a moment!
+I have capacity for one more partner this season. Happy to walk you through how it works — zero commitment, just a conversation.
 
-Best regards,
 [Rider Name]""",
 
     "LI Msg 5: Unique Offer (Day 21)": """Hi [Contact Name],
 
-As I finalise preparations for the [Championship Name] season, I wanted to let you know about an exciting opportunity to get involved.
+We’re locking in the final partner spots for the [Championship Name] season. Once they’re gone, they’re gone until next year.
 
-I’ve recently launched my [Team Name], where members can join the journey and enjoy exclusive benefits:
+I’ve recently launched my [Team Name] with options ranging from supporter-level access all the way up to VIP — including having your name on my race helmet.
 
-• £35 Membership: Includes race weekend reports, hand-picked high-res photos, team stickers, and discounts on clothing.
-• £350 VIP Membership: Add your signature to my race helmet, plus a chance to win it at the end of the season!
+But the real opportunity is a tailored partnership built around [Business Name]’s specific goals — whether that’s customer acquisition, team engagement, or brand visibility.
 
-If this sounds interesting, or if you’d like to discuss tailored sponsorship options, let me know. I’d love to include [Business Name] in this season’s journey.
+I have 2 spots left. A quick 10-minute call and I can walk you through exactly what would work for you.
 
-Best regards,
+Worth a chat?
+
 [Rider Name]""",
 
     "LI Msg 6: Final Nudge (Day 28)": """Hi [Contact Name],
 
-I know how busy things can get, so I wanted to check in one last time. If sponsorship or collaboration isn’t the right fit, no problem at all—but I’d love to hear your thoughts on what works best for [Business Name] in partnerships.
+This is my last message on this.
 
-If motorsport isn’t on your radar yet, I’d be happy to share why it’s a growing opportunity for forward-thinking businesses.
+I’ve reached out a few times because I genuinely believe [Business Name] would be a great fit. But I also respect your time.
 
-Even a quick “yes” or “not for us” would help me plan. Thanks so much for considering, and I hope to hear from you soon!
+If the answer is “not right now” — completely fine. Just let me know and I’ll stop following up.
 
-Best regards,
+If the answer is “maybe, I just haven’t had time” — reply with “interested” and I’ll send you a one-page summary. No call needed.
+
+Either way, I’d rather know than guess.
+
+Thanks for your time, [Contact Name].
+
 [Rider Name]""",
 
     "Initial Contact": """(See Email: Cold Opener above)""",
     "Follow Up": """(See LI Msg 2 or others)""",
-    "Proposal": """Hi [Contact Name],
+    "Proposal": """[Contact Name],
 
-Great speaking with you earlier. Based on what you shared about your focus on [Goal Answer], I've put together this proposal.
+No fluff — here’s exactly what I’m proposing based on our conversation.
 
-**Strategy for [Business Name]**:
-- Target Audience: [Audience Answer]
-- Activation: Logo placement + Social Media Campaign
+**The Goal for [Business Name]:**
+You told me you’re focused on [Goal Answer]. Everything below is built around that.
 
-**Benefit**:
-This directly addresses your need for [Success Answer].
+**The Plan:**
+• Audience: [Audience Answer] — this is who sees your brand every race weekend
+• Activation: Logo placement + social media campaign + hospitality access
 
-Attached is the full deck. Let's get you on the grid!
+**Why This Works:**
+This directly solves your need for [Success Answer] — and it does it in a way your competitors aren’t.
 
-Best,
+The proposal deck is attached. I’ve kept it simple on purpose.
+
+Next step: You tell me what you’d change. I’ll adjust and we lock it in.
+
 [Rider Name]"""
 }
 
@@ -264,6 +513,16 @@ def get_sector_hook(sector_name):
         if key in sector_name:
             return hook
     return SECTOR_HOOKS["Other"]
+
+def _get_time_greeting():
+    """Returns appropriate greeting based on current time of day."""
+    hour = datetime.now().hour
+    if hour < 12:
+        return "Good morning"
+    elif hour < 17:
+        return "Good afternoon"
+    else:
+        return "Good evening"
 
 
 
@@ -355,13 +614,14 @@ def mock_search_places(location, radius, sector, mode="sector"):
             })
     return pd.DataFrame(mock_data)
 
-def _format_contact_name(full_name, template_type):
+def _format_contact_name(full_name, template_type, salutation="Mr"):
     """Format contact name based on message type.
-    - Initial messages (Email opener, LI Msg 1): formal 'Mr/Mrs LastName'
+    - Initial messages (Email opener, LI Msg 1): formal 'Mr/Mrs/Miss LastName'
     - Follow-up messages (LI Msg 2+): first name only
+    - salutation: 'Mr', 'Mrs', 'Miss', 'Ms', 'Dr' (selected per contact)
     """
     if not full_name or full_name.strip() == "":
-        return "Mr/Mrs [Name]"  # Placeholder if no name set
+        return f"{salutation} [Name]"  # Placeholder if no name set
     
     name_parts = full_name.strip().split()
     first_name = name_parts[0] if name_parts else full_name
@@ -372,19 +632,19 @@ def _format_contact_name(full_name, template_type):
     
     if is_initial:
         if last_name:
-            return f"Mr/Mrs {last_name}"
+            return f"{salutation} {last_name}"
         else:
-            return f"Mr/Mrs {first_name}"
+            return f"{salutation} {first_name}"
     else:
         # Follow-up messages: use first name (they know you now)
         return first_name
 
-def generate_message(template_type, business_name, rider_name, sector, context_answers=None, town="MyTown", championship="Championship", extra_context={}, contact_name=""):
+def generate_message(template_type, business_name, rider_name, sector, context_answers=None, town="MyTown", championship="Championship", extra_context={}, contact_name="", salutation="Mr"):
     template = TEMPLATES.get(template_type, "")
     hook = get_sector_hook(sector)
     
     # Format contact name based on message type (formal vs first-name)
-    formatted_name = _format_contact_name(contact_name, template_type)
+    formatted_name = _format_contact_name(contact_name, template_type, salutation)
     
     msg = template.replace("[Business Name]", business_name)\
                   .replace("[Rider Name]", rider_name)\
@@ -394,7 +654,8 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
                   .replace("[Sector Hook]", hook)\
                   .replace("[Contact Name/Business Name]", formatted_name)\
                   .replace("[Contact Name]", formatted_name)\
-                  .replace("[Current Year]", "2026")
+                  .replace("[Current Year]", "2026")\
+                  .replace("Good morning", _get_time_greeting())
                   
     msg = msg.replace("[Season Goal]", extra_context.get("goal", ""))\
              .replace("[Previous Champ]", extra_context.get("prev_champ", ""))\
@@ -1098,20 +1359,40 @@ if current_tab == "📊 Active Campaign":
                     next_step = last_step + 1
                     
                     if next_step < len(_MSG_SEQUENCE):
-                        next_msg_label = _MSG_SEQUENCE[next_step].split(":")[0].strip()
+                        # Show full step label with day info for stage visibility
+                        step_name = _MSG_SEQUENCE[next_step]
+                        # Extract short label like "LI Msg 2" and day info like "(Day 2)"
+                        day_info = ""
+                        if "(Day" in step_name:
+                            day_info = " " + step_name[step_name.index("("):step_name.index(")")+1]
+                        next_msg_label = step_name.split(":")[0].strip() + day_info
                     elif last_step >= 0:
                         next_msg_label = "✅ Sequence Done"
                     else:
                         next_msg_label = "Opener"
                     
-                    cal_title = f"{row['Business Name']} → {next_msg_label}"
+                    # Show full contact name + company + sequence step
+                    # Full name for easy cross-referencing with LinkedIn
+                    contact_display = (row.get('Contact Name', '') or '').strip()
+                    company = row['Business Name']
+                    if contact_display:
+                        cal_title = f"{contact_display} — {company} → {next_msg_label}"
+                    else:
+                        cal_title = f"{company} → {next_msg_label}"
+                    
+                    # Extract contact URL from notes if available
+                    event_notes = row.get('Notes', {})
+                    if isinstance(event_notes, str):
+                        try: event_notes = json.loads(event_notes)
+                        except: event_notes = {}
+                    event_contact_url = event_notes.get('contact_url', '') if isinstance(event_notes, dict) else ''
                     
                     events.append({
                         "title": cal_title,
                         "start": row['Next Action'].strftime("%Y-%m-%d"),
                         "backgroundColor": get_status_color(row['Status']),
                         "borderColor": get_status_color(row['Status']),
-                        "extendedProps": {"id": row['id']}
+                        "extendedProps": {"id": row['id'], "contact_url": event_contact_url, "contact_name": contact_display}
                     })
             
             calendar_options = {
@@ -1121,6 +1402,8 @@ if current_tab == "📊 Active Campaign":
                     "right": "dayGridMonth,timeGridWeek,timeGridDay"
                 },
                 "initialView": "dayGridMonth",
+                "initialDate": datetime.now().strftime("%Y-%m-%d"),
+                "navLinks": True,
             }
             
             cal_data = calendar(events=events, options=calendar_options)
@@ -1129,8 +1412,7 @@ if current_tab == "📊 Active Campaign":
                  event = cal_data["eventClick"]["event"]
                  lead_id = event["extendedProps"]["id"]
                  st.session_state.selected_lead_id = lead_id
-                 st.session_state.requested_tab = "✉️ Outreach Assistant"
-                 st.rerun()
+                 calendar_contact_card(lead_id)
             
         # --- MODE: LIST TABLE (Legacy) ---
         else:
@@ -1536,55 +1818,115 @@ if current_tab == " Search & Add":
         df_results = st.session_state.leads.copy()
         df_results["In List"] = df_results["Business Name"].apply(lambda x: "✅" if str(x).lower() in existing_names else "")
         
-        # MAP DISPLAY (If lat/lon ok)
+        # --- QUALITY SCORE DISPLAY ---
+        if "Quality" in df_results.columns:
+            df_results["Score"] = df_results["Quality"].apply(lambda q: "⭐" * int(q) if q else "")
+        
+        # --- SIZE DISPLAY ---
+        if "Size" not in df_results.columns:
+            df_results["Size"] = "—"
+        
+        # --- SOCIAL PRESENCE INDICATOR ---
+        if "Social" in df_results.columns:
+            def _social_icons(social_dict):
+                if not social_dict or not isinstance(social_dict, dict):
+                    return "❌ None"
+                icons = []
+                if social_dict.get("linkedin"): icons.append("🔗")
+                if social_dict.get("facebook"): icons.append("📘")
+                if social_dict.get("instagram"): icons.append("📸")
+                if social_dict.get("twitter"): icons.append("🐦")
+                return " ".join(icons) if icons else "❌ None"
+            df_results["Socials"] = df_results["Social"].apply(_social_icons)
+        
+        # --- MAP DISPLAY (If lat/lon ok) ---
         if "lat" in df_results.columns:
                 st.map(df_results)
-                
-        # Show Website in table
-        # User requested replacing Rating with Distance
-        last_col = "Distance" if "Distance" in df_results.columns else "Rating"
-        disp_cols = ["In List", "Business Name", "Address", "Sector", last_col]
         
-        if "Website" in df_results.columns:
-            disp_cols.insert(3, "Website")
+        # --- RESULTS SUMMARY ---
+        total = len(df_results)
+        high_q = len(df_results[df_results.get("Quality", 0) >= 4]) if "Quality" in df_results.columns else 0
+        st.caption(f"📊 **{total} results** found • {high_q} high-quality leads (4-5⭐)")
+                
+        # --- BUILD DISPLAY COLUMNS ---
+        disp_cols = ["In List", "Business Name", "Address"]
+        
+        if "Score" in df_results.columns:
+            disp_cols.append("Score")
+        if "Size" in df_results.columns:
+            disp_cols.append("Size")
+        if "Socials" in df_results.columns:
+            disp_cols.append("Socials")
+        if "Distance" in df_results.columns:
+            disp_cols.append("Distance")
+        
+        # Only show columns that exist
+        disp_cols = [c for c in disp_cols if c in df_results.columns]
             
         st.dataframe(
                 df_results[disp_cols],
-                width="stretch"
+                width="stretch",
+                column_config={
+                    "Score": st.column_config.TextColumn("Quality", width="small"),
+                    "Size": st.column_config.TextColumn("Est. Size", width="small"),
+                    "Socials": st.column_config.TextColumn("Social", width="small"),
+                    "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
+                    "In List": st.column_config.TextColumn("Added", width="small"),
+                }
         )
     
         
         # Add to DB Logic
         col_s1, col_s2 = st.columns([3, 1])
         with col_s1:
-            # Filter out already added ones for the dropdown preference, or just show all
             add_choice = st.selectbox("Select result to track", df_results["Business Name"].unique())
         with col_s2:
-            # Check status
             is_in_list = add_choice.lower() in existing_names
             
             if st.button("➕ Add to My Leads", disabled=is_in_list):
                 if is_in_list:
                     st.error("Already in your list!")
                 else:
-                    # Get full row
                     row = df_results[df_results["Business Name"] == add_choice].iloc[0]
                     
-                    # Extract fields safely
                     b_name = row["Business Name"]
                     b_sect = row["Sector"]
                     b_loc = row["Address"]
-                    b_web = row.get("Website", "") # Safe get
+                    b_web = row.get("Website", "")
+                    b_contact = row.get("Owner", "")  # Pre-fill contact from owner
                     
-                    # Pass explicit args to match db_manager signature
+                    # Build enriched notes from search data
+                    enriched_notes = {}
+                    if row.get("Owner"):
+                        enriched_notes["owner"] = row["Owner"]
+                    if row.get("Description"):
+                        enriched_notes["description"] = row["Description"]
+                    if row.get("Social") and isinstance(row["Social"], dict):
+                        enriched_notes["social_links"] = row["Social"]
+                        # Auto-save LinkedIn as contact URL if available
+                        if row["Social"].get("linkedin"):
+                            enriched_notes["contact_url"] = row["Social"]["linkedin"]
+                    if row.get("Reviews"):
+                        enriched_notes["reviews_count"] = int(row["Reviews"])
+                    if row.get("Size"):
+                        enriched_notes["company_size"] = row["Size"]
+                    if row.get("Quality"):
+                        enriched_notes["quality_score"] = int(row["Quality"])
+                    
+                    notes_json = json.dumps(enriched_notes) if enriched_notes else "{}"
+                    
                     try:
-                        new_lead_id = db.add_lead(st.session_state.user_id, b_name, b_sect, b_loc, website=b_web)
+                        new_lead_id = db.add_lead(
+                            st.session_state.user_id, b_name, b_sect, b_loc, 
+                            website=b_web, contact_name=b_contact, notes_json=notes_json
+                        )
                     except Exception as e:
                         st.error(f"Critical Error in add_lead: {e}")
                         new_lead_id = None
                         
                     if new_lead_id:
-                        st.toast(f"Added {add_choice} to Dashboard!")
+                        quality_msg = f" (Quality: {'⭐' * int(row.get('Quality', 0))})" if row.get("Quality") else ""
+                        st.toast(f"Added {add_choice}{quality_msg}")
                         
                         # [NEW] Auto-Switch for SCOUT MODE
                         if search_mode == "Company Scout":
@@ -1592,7 +1934,6 @@ if current_tab == " Search & Add":
                             st.session_state.requested_tab = "✉️ Outreach Assistant"
                             st.rerun()
                             
-                        # Force rerun to update duplicate list
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -1875,7 +2216,7 @@ Supply a source URL for every data point. Do not guess emails."""
 
 
                 with col2:
-                    # Top Controls: Action Mode + Contact Name Update
+                    # Top Controls: Action Mode + Contact Details
                     top_c1, top_c2 = st.columns([1.2, 1])
                     with top_c1:
                          c_mode = st.radio("Action Mode", ["Draft Opener", "Handle Reply"], horizontal=True)
@@ -1883,14 +2224,42 @@ Supply a source URL for every data point. Do not guess emails."""
                          # [UPDATE] Auto-populate with latest DB value if available
                          current_contact = lead.get('Contact Name', '')
                          new_name = st.text_input("Found Contact Name", value=current_contact, key=f"contact_name_input_{lead['id']}")
-                         if st.button("Update Contact"):
-                             if new_name:
-                                 db.update_lead_contact(lead['id'], new_name)
-                                 st.toast(f"✅ Contact updated to: {new_name}")
-                                 time.sleep(0.5)
-                                 st.rerun()
-                             else:
-                                 st.warning("Please enter a contact name first.")
+                    
+                    # Contact Details Row: Salutation + Profile URL
+                    detail_c1, detail_c2 = st.columns([1, 2])
+                    with detail_c1:
+                         # Salutation selector (persisted in notes)
+                         lead_notes_sal = lead.get('Notes', {})
+                         if isinstance(lead_notes_sal, str):
+                             try: lead_notes_sal = json.loads(lead_notes_sal)
+                             except: lead_notes_sal = {}
+                         saved_salutation = lead_notes_sal.get('salutation', 'Mr') if isinstance(lead_notes_sal, dict) else 'Mr'
+                         sal_options = ["Mr", "Mrs", "Miss", "Ms", "Dr"]
+                         sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
+                         contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
+                    with detail_c2:
+                         # Contact Profile URL (LinkedIn, Facebook, etc.)
+                         saved_url = lead_notes_sal.get('contact_url', '') if isinstance(lead_notes_sal, dict) else ''
+                         contact_url = st.text_input("Profile URL (LinkedIn/Facebook)", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
+                    
+                    # Save button for all contact details
+                    if st.button("Update Contact", key=f"btn_update_contact_{lead['id']}"):
+                         if new_name:
+                             db.update_lead_contact(lead['id'], new_name)
+                             # Also save salutation and URL in notes
+                             save_notes = lead.get('Notes', {})
+                             if isinstance(save_notes, str):
+                                 try: save_notes = json.loads(save_notes)
+                                 except: save_notes = {}
+                             if not isinstance(save_notes, dict): save_notes = {}
+                             save_notes['salutation'] = contact_salutation
+                             save_notes['contact_url'] = contact_url
+                             db.update_lead_notes(lead['id'], save_notes)
+                             st.toast(f"✅ Contact updated: {contact_salutation} {new_name}")
+                             time.sleep(0.5)
+                             st.rerun()
+                         else:
+                             st.warning("Please enter a contact name first.")
                     
                     if c_mode == "Draft Opener":
                         st.subheader("Outreach Message")
@@ -1942,7 +2311,7 @@ Supply a source URL for every data point. Do not guess emails."""
                         
                         # Generate message with automatic name formatting
                         # Initial messages use Mr/Mrs LastName, follow-ups use first name
-                        draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx, contact_name=contact_name_raw)
+                        draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx, contact_name=contact_name_raw, salutation=contact_salutation)
                         
                         final_msg = st.text_area("Edit Message:", value=draft, height=250)
                         
@@ -1995,6 +2364,10 @@ Supply a source URL for every data point. Do not guess emails."""
                                     mark_notes = {}
                                 mark_notes['outreach_step'] = current_step_idx
                                 mark_notes['last_template'] = tpl
+                                # Persist salutation and contact URL
+                                mark_notes['salutation'] = contact_salutation
+                                if contact_url:
+                                    mark_notes['contact_url'] = contact_url
                                 db.update_lead_notes(lead['id'], mark_notes)
                             
                                 st.success(f"🎉 Message Logged! 📅 Next follow-up on {final_date}.")

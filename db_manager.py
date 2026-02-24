@@ -139,29 +139,69 @@ def get_user_profile(user_id):
     return None
 
 def save_user_profile(email, name, profile_data):
-    # 1. Save to Airtable
-    if airtable_manager.is_configured():
-        airtable_manager.save_user_profile(email, name, profile_data)
+    airtable_ok = False
+    airtable_error = None
 
-    # 2. Save to Local SQLite (Always keep a backup/cache)
+    # 1. Save to Airtable (with retry + verification)
+    if airtable_manager.is_configured():
+        try:
+            result = airtable_manager.save_user_profile(email, name, profile_data)
+            # Handle both old (bool) and new (tuple) return formats
+            if isinstance(result, tuple):
+                airtable_ok, airtable_error = result
+            else:
+                airtable_ok = bool(result)
+                airtable_error = None if airtable_ok else "Unknown error"
+        except Exception as e:
+            airtable_ok = False
+            airtable_error = str(e)
+            print(f"Airtable save exception: {e}")
+
+        # User feedback
+        if airtable_ok:
+            if airtable_error:
+                # Saved but with warning
+                try:
+                    st.toast(f"⚠️ Profile saved to cloud with warning: {airtable_error}", icon="⚠️")
+                except:
+                    pass
+            else:
+                try:
+                    st.toast("✅ Profile saved to cloud database", icon="✅")
+                except:
+                    pass
+        else:
+            try:
+                st.warning(f"⚠️ Cloud save failed: {airtable_error}. Your data is saved locally and will sync on next login.")
+            except:
+                pass
+            print(f"Airtable save failed for {email}: {airtable_error}")
+
+    # 2. Save to Local SQLite (ALWAYS — serves as backup/cache)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Check if user exists
-    c.execute("SELECT id FROM users WHERE email=?", (email,))
-    exists = c.fetchone()
+    try:
+        # Check if user exists
+        c.execute("SELECT id FROM users WHERE email=?", (email,))
+        exists = c.fetchone()
+        
+        profile_json = json.dumps(profile_data)
+        
+        if exists:
+            user_id = exists[0]
+            c.execute("UPDATE users SET name=?, profile_json=? WHERE email=?", (name, profile_json, email))
+        else:
+            c.execute("INSERT INTO users (email, name, profile_json) VALUES (?, ?, ?)", (email, name, profile_json))
+            user_id = c.lastrowid
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Local SQLite save error: {e}")
+        user_id = None
+    finally:
+        conn.close()
     
-    profile_json = json.dumps(profile_data)
-    
-    if exists:
-        user_id = exists[0]
-        c.execute("UPDATE users SET name=?, profile_json=? WHERE email=?", (name, profile_json, email))
-    else:
-        c.execute("INSERT INTO users (email, name, profile_json) VALUES (?, ?, ?)", (email, name, profile_json))
-        user_id = c.lastrowid
-    
-    conn.commit()
-    conn.close()
     return user_id
 
 def add_lead(user_id, business_name, sector, location, website="", status="Pipeline", notes_json="{}", next_action_date=None, contact_name="", last_contact_date="Never", value=0):

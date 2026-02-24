@@ -146,6 +146,19 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
 
         mapped_results = []
         skipped_dist = 0
+        skipped_chain = 0
+        
+        # Known national/international chains to filter out
+        CHAIN_EXCLUSIONS = [
+            "DHL", "FEDEX", "UPS", "ROYAL MAIL", "HERMES", "TNT", "TESCO",
+            "SAINSBURY", "ASDA", "ALDI", "LIDL", "MORRISONS", "WAITROSE",
+            "MCDONALD", "BURGER KING", "KFC", "SUBWAY", "COSTA COFFEE",
+            "STARBUCKS", "GREGGS", "DOMINO", "PIZZA HUT", "PREMIER INN",
+            "TRAVELODGE", "HILTON", "MARRIOTT", "HSBC", "BARCLAYS",
+            "LLOYDS", "NATWEST", "SANTANDER", "NATIONWIDE", "POST OFFICE",
+            "AUTOTRADER", "HALFORDS", "KWIK FIT", "VODAFONE", "O2", "EE",
+            "THREE", "BT", "SKY", "VIRGIN MEDIA", "AMAZON"
+        ]
         
         for item in raw_businesses:
             # Skip None/non-dict items from API response
@@ -172,39 +185,98 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 dist_val = round(haversine_distance(start_lat, start_lon, lat, lon), 1)
                 
             # ABSOLUTE FILTER: If result is outside radius, discard it.
-            # This protects the user from "1,205 results across the UK".
-            # Even in Fallback mode, we reject anything too far.
             if dist_val > radius:
                 skipped_dist += 1
                 continue
                 
-            # [NEW] Sector Cleaning Filter
+            # [UPGRADED] Cleaning Filters
             cat_upper = (item.get("category") or "").upper()
             name_upper = (name or "").upper()
-            excluded_terms = ["TAXI", "AIRPORT SHUTTLE", "AMBULANCE", "CHAUFFEUR", "CAB ", "MINICAB", "UBER"]
             
+            # Junk category filter
+            excluded_terms = ["TAXI", "AIRPORT SHUTTLE", "AMBULANCE", "CHAUFFEUR", 
+                            "CAB ", "MINICAB", "UBER", "CHURCH", "CEMETERY",
+                            "GOVERNMENT OFFICE", "PUBLIC SCHOOL"]
             if any(term in cat_upper for term in excluded_terms) or any(term in name_upper for term in excluded_terms):
                 continue
+            
+            # Chain/National filter — skip large corporations with no local decision-maker
+            is_chain = any(chain in name_upper for chain in CHAIN_EXCLUSIONS)
+            if is_chain:
+                skipped_chain += 1
+                continue
 
+            # --- EXTRACT ENRICHED DATA FROM OUTSCRAPER ---
+            reviews_count = item.get("reviews", item.get("reviews_count", 0))
+            try:
+                reviews_count = int(reviews_count) if reviews_count else 0
+            except:
+                reviews_count = 0
+            
+            website = item.get("site", "")
+            phone = item.get("phone", "")
+            description = item.get("description", item.get("about", ""))
+            owner = item.get("owner_title", item.get("owner", ""))
+            
+            # Social media links (Outscraper extracts these)
+            social_links = {}
+            for social_key in ["facebook", "instagram", "twitter", "linkedin", "youtube"]:
+                val = item.get(social_key, "")
+                if val:
+                    social_links[social_key] = val
+            
+            # --- COMPANY SIZE ESTIMATION (from review count) ---
+            if reviews_count > 500:
+                size_estimate = "Large"
+            elif reviews_count > 100:
+                size_estimate = "Medium"
+            elif reviews_count > 20:
+                size_estimate = "Small"
+            else:
+                size_estimate = "Micro/Local"
+            
+            # --- LEAD QUALITY SCORE (1-5 stars) ---
+            quality_score = 0
+            if website:
+                quality_score += 1  # Has a website
+            if social_links:
+                quality_score += 1  # Has social media presence
+            if dist_val <= 25:
+                quality_score += 1  # Very local (within 25 miles)
+            if 5 <= reviews_count <= 500:
+                quality_score += 1  # Right size (not too small, not a chain)
+            if item.get("rating", 0) >= 4.0:
+                quality_score += 1  # Well-rated business
+            
             mapped_results.append({
                 "Business Name": name,
                 "Address": item.get("full_address", item.get("address", "")),
                 "Rating": item.get("rating", 0.0),
                 "Sector": item.get("category", item.get("type", "Search Result")),
-                "Website": item.get("site", ""),
-                "Phone": item.get("phone", ""),
+                "Website": website,
+                "Phone": phone,
                 "lat": lat,
                 "lon": lon,
                 "place_id": item.get("place_id", item.get("google_id")),
                 "Source": "Outscraper V3",
-                "Distance": dist_val
+                "Distance": dist_val,
+                # --- NEW ENRICHED FIELDS ---
+                "Reviews": reviews_count,
+                "Size": size_estimate,
+                "Description": description or "",
+                "Owner": owner or "",
+                "Social": social_links,
+                "Quality": quality_score,
+                "Is Chain": False
             })
             
-        # Sort by Distance (Closest First)
-        mapped_results.sort(key=lambda x: x.get("Distance", 999.0))
+        # Sort by Quality (highest first), then Distance (closest first)
+        mapped_results.sort(key=lambda x: (-x.get("Quality", 0), x.get("Distance", 999.0)))
             
         if skipped_dist > 0:
             print(f"Skipped {skipped_dist} results outside {radius} mile radius.")
+        if skipped_chain > 0:
+            print(f"Filtered out {skipped_chain} national/international chain results.")
             
         # --- CACHE SAVE ---
         set_cached_search(query, location_str, radius, limit, skip, mapped_results)

@@ -1,9 +1,41 @@
 import requests
 import json
+import time
 import streamlit as st
 from datetime import datetime
 
 class AirtableManager:
+    # Maps internal profile keys -> Airtable column names for individual fields
+    # These columns should exist in the "Users" table in Airtable
+    PROFILE_FIELD_MAP = {
+        "first_name": "First Name",
+        "last_name": "Last Name",
+        "vehicle": "Vehicle",
+        "championship": "Championship",
+        "town": "Town",
+        "state": "State",
+        "country": "Country",
+        "zip_code": "Zip Code",
+        "competitors": "Competitors",
+        "audience": "Audience",
+        "televised": "Televised",
+        "streamed": "Streamed",
+        "tv_reach": "TV Reach",
+        "goal": "Season Goal",
+        "prev_champ": "Previous Championship",
+        "achievements": "Achievements",
+        "team": "Team Name",
+        "rep_mode": "Rep Mode",
+        "rep_name": "Rep Name",
+        "rep_role": "Rep Role",
+        "onboarding_complete": "Onboarding Complete",
+    }
+    # Reverse: Airtable column name -> internal profile key
+    PROFILE_REVERSE_MAP = {v: k for k, v in PROFILE_FIELD_MAP.items()}
+
+    MAX_RETRIES = 3
+    RETRY_BASE_DELAY = 1  # seconds
+
     def __init__(self):
         self.api_key = None
         self.base_id = None
@@ -12,7 +44,7 @@ class AirtableManager:
         self.headers = None
         self.setup_from_secrets()
 
-        # INTERNAL (App) -> EXTERNAL (Airtable)
+        # INTERNAL (App) -> EXTERNAL (Airtable) for LEADS table
         self.FIELD_MAP = {
             "User Email": "user email",
             "Business Name": "business name",
@@ -52,10 +84,116 @@ class AirtableManager:
         t_name = table_name if table_name else self.table_name
         return f"https://api.airtable.com/v0/{self.base_id}/{t_name}"
 
+    def _request_with_retry(self, method, url, **kwargs):
+        """
+        Makes an HTTP request with retry logic and exponential backoff.
+        Returns the response object on success, raises on final failure.
+        """
+        last_error = None
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                response = method(url, **kwargs)
+
+                # Rate limit (429) — wait and retry
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", self.RETRY_BASE_DELAY * attempt))
+                    print(f"  ⏳ Rate limited. Waiting {retry_after}s before retry {attempt}/{self.MAX_RETRIES}...")
+                    time.sleep(retry_after)
+                    continue
+
+                response.raise_for_status()
+                return response
+
+            except requests.exceptions.ConnectionError as e:
+                last_error = e
+                delay = self.RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                print(f"  🔌 Connection error (attempt {attempt}/{self.MAX_RETRIES}). Retrying in {delay}s...")
+                time.sleep(delay)
+
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                status = e.response.status_code if e.response is not None else 0
+                # Don't retry client errors (4xx) except 429 (handled above) and 408 (timeout)
+                if 400 <= status < 500 and status not in (408, 429):
+                    raise  # Permanent client error, don't retry
+                delay = self.RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                print(f"  ⚠️ HTTP {status} (attempt {attempt}/{self.MAX_RETRIES}). Retrying in {delay}s...")
+                time.sleep(delay)
+
+            except requests.exceptions.Timeout as e:
+                last_error = e
+                delay = self.RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                print(f"  ⏱️ Timeout (attempt {attempt}/{self.MAX_RETRIES}). Retrying in {delay}s...")
+                time.sleep(delay)
+
+        # All retries exhausted
+        raise last_error or Exception("Request failed after all retries")
+
     # --- USER PROFILE METHODS ---
+    def _build_profile_fields(self, email, name, profile_data):
+        """
+        Builds the Airtable fields dict with both individual columns
+        AND the Profile JSON backup column.
+        """
+        fields = {
+            "Email": email,
+            "Name": name,
+        }
+
+        # Map individual profile keys to Airtable columns
+        for internal_key, at_column in self.PROFILE_FIELD_MAP.items():
+            value = profile_data.get(internal_key)
+            if value is not None:
+                # Airtable doesn't accept Python booleans in single-line text
+                # Convert bools to checkbox-friendly format
+                if isinstance(value, bool):
+                    fields[at_column] = value  # Airtable checkbox accepts True/False
+                elif isinstance(value, (int, float)):
+                    fields[at_column] = str(value)
+                else:
+                    fields[at_column] = str(value)
+
+        # Full JSON backup (includes ALL keys, even ones not mapped above like API keys)
+        fields["Profile JSON"] = json.dumps(profile_data)
+
+        return fields
+
+    def _parse_profile_from_fields(self, fields):
+        """
+        Reconstructs a profile dict from individual Airtable columns,
+        falling back to Profile JSON for any missing keys.
+        """
+        # Start with the JSON backup
+        p_json = fields.get("Profile JSON", "{}")
+        try:
+            profile = json.loads(p_json)
+        except (json.JSONDecodeError, TypeError):
+            profile = {}
+
+        # Overwrite with individual columns (they're the source of truth if present)
+        for at_column, internal_key in self.PROFILE_REVERSE_MAP.items():
+            value = fields.get(at_column)
+            if value is not None and value != "":
+                # Convert string booleans back
+                if internal_key in ("onboarding_complete", "rep_mode"):
+                    if isinstance(value, bool):
+                        profile[internal_key] = value
+                    elif isinstance(value, str):
+                        profile[internal_key] = value.lower() in ("true", "1", "yes")
+                elif internal_key == "competitors":
+                    try:
+                        profile[internal_key] = int(value)
+                    except (ValueError, TypeError):
+                        profile[internal_key] = value
+                else:
+                    profile[internal_key] = value
+
+        return profile
+
     def get_user_by_email(self, email):
         """
         Fetch user profile from 'Users' table.
+        Reads individual columns + Profile JSON and merges them.
         """
         if not self.is_configured(): return None
         
@@ -63,31 +201,29 @@ class AirtableManager:
         params = {"filterByFormula": filter_formula}
         
         try:
-            response = requests.get(self._get_url(self.users_table_name), headers=self.headers, params=params)
-            response.raise_for_status()
+            response = self._request_with_retry(
+                requests.get,
+                self._get_url(self.users_table_name),
+                headers=self.headers,
+                params=params
+            )
             data = response.json()
             records = data.get("records", [])
             
             if records:
                 r = records[0]
                 fields = r.get("fields", {})
-                p_json = fields.get("Profile JSON", "{}")
-                try:
-                    profile = json.loads(p_json)
-                except:
-                    profile = {}
+                profile = self._parse_profile_from_fields(fields)
                     
                 return {
-                    "id": r.get("id"), # Airtable ID
+                    "id": r.get("id"), # Airtable Record ID
                     "email": fields.get("Email"),
                     "name": fields.get("Name"),
                     "profile": profile
                 }
         except Exception as e:
-            if "403" in str(e) or (hasattr(e, 'response') and e.response.status_code == 403):
-                 # Only show once to avoid spam? No, good to show.
-                 pass 
-                 # st.warning(f"Airtable: Access denied to '{self.users_table_name}'. Check permissions.")
+            if "403" in str(e) or (hasattr(e, 'response') and getattr(e.response, 'status_code', 0) == 403):
+                 print(f"Airtable: Access denied to '{self.users_table_name}'. Check permissions.")
             print(f"Airtable User Fetch Error: {e}")
             
         return None
@@ -95,34 +231,76 @@ class AirtableManager:
     def save_user_profile(self, email, name, profile_data):
         """
         Create or Update user in 'Users' table.
+        Saves individual columns + Profile JSON backup.
+        Includes retry logic and read-back verification.
+        Returns (success: bool, error_message: str or None)
         """
-        if not self.is_configured(): return False
+        if not self.is_configured():
+            return False, "Airtable not configured"
         
         # Check existence
         existing = self.get_user_by_email(email)
         
-        profile_str = json.dumps(profile_data)
-        fields = {
-            "Email": email,
-            "Name": name,
-            "Profile JSON": profile_str
-        }
+        # Build fields with individual columns + JSON backup
+        fields = self._build_profile_fields(email, name, profile_data)
         
+        url = self._get_url(self.users_table_name)
+
         try:
             if existing:
-                # Update
+                # Update existing record
                 payload = {"records": [{"id": existing["id"], "fields": fields}]}
-                url = self._get_url(self.users_table_name)
-                requests.patch(url, headers=self.headers, json=payload).raise_for_status()
+                self._request_with_retry(requests.patch, url, headers=self.headers, json=payload)
             else:
-                # Create
+                # Create new record
                 payload = {"records": [{"fields": fields}]}
-                url = self._get_url(self.users_table_name)
-                requests.post(url, headers=self.headers, json=payload).raise_for_status()
-            return True
+                self._request_with_retry(requests.post, url, headers=self.headers, json=payload)
+            
+            # Verification: read back and confirm key fields saved
+            verified = self._verify_profile_save(email, name, profile_data)
+            if not verified:
+                print(f"⚠️ Profile save verification warning for {email} — data may be incomplete")
+                return True, "Saved but verification found differences"
+
+            return True, None
+
         except Exception as e:
-            print(f"Airtable User Save Error: {e}")
-            return False
+            error_msg = f"Airtable User Save Error: {e}"
+            print(error_msg)
+            return False, str(e)
+
+    def _verify_profile_save(self, email, name, profile_data):
+        """
+        Read back the profile after saving and verify key fields match.
+        Returns True if verification passes.
+        """
+        try:
+            saved = self.get_user_by_email(email)
+            if not saved:
+                print(f"  ❌ Verification FAIL: Could not read back user {email}")
+                return False
+
+            # Check critical fields
+            if saved.get("name") != name:
+                print(f"  ❌ Verification FAIL: Name mismatch. Expected '{name}', got '{saved.get('name')}'")
+                return False
+
+            saved_profile = saved.get("profile", {})
+            critical_keys = ["first_name", "last_name", "championship", "town", "country", "onboarding_complete"]
+            
+            for key in critical_keys:
+                expected = profile_data.get(key)
+                actual = saved_profile.get(key)
+                if expected is not None and actual is not None:
+                    # Normalize for comparison (string vs bool, etc.)
+                    if str(expected).lower() != str(actual).lower():
+                        print(f"  ⚠️ Verification warning: '{key}' expected '{expected}', got '{actual}'")
+
+            return True
+
+        except Exception as e:
+            print(f"  ⚠️ Verification check error (non-fatal): {e}")
+            return True  # Don't fail the save if verification itself errors
 
 
     def get_leads(self, user_email):
