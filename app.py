@@ -233,11 +233,11 @@ def calendar_contact_card(lead_id):
     seq_options = [
         "Email: Cold Opener",
         "LI Msg 1: Connect",
-        "LI Msg 2: Reminder (Day 2)",
-        "LI Msg 3: Opportunities (Day 7)",
-        "LI Msg 4: Value (Day 14)",
-        "LI Msg 5: Unique Offer (Day 21)",
-        "LI Msg 6: Final Nudge (Day 28)"
+        "LI Msg 2: Thanks for connecting (Day 2)",
+        "LI Msg 3: Homework (Day 7)",
+        "LI Msg 4: Momentum (Day 14)",
+        "LI Msg 5: Scarcity (Day 21)",
+        "LI Msg 6: Final (Day 28)"
     ]
     
     last_sent_step = lead_notes.get('outreach_step', -1)
@@ -294,7 +294,7 @@ def calendar_contact_card(lead_id):
         elif "Msg 3" in current_template: def_days = 7
         elif "Msg 4" in current_template: def_days = 7
         elif "Msg 5" in current_template: def_days = 7
-        elif "Msg 6" in current_template: def_days = 30
+        elif "Msg 6" in current_template: def_days = 7
         
         auto_date = datetime.now() + timedelta(days=def_days)
         
@@ -379,108 +379,88 @@ def calendar_contact_card(lead_id):
 TEMPLATES = {
     "Email: Cold Opener": """Good morning [Contact Name],
 
-My name is [Rider Name] and I am based in [Town], close to your head office.
+My name is [Rider Name] and I'm based in [Town], close to your area.
 
-I am racing this season in the [Championship Name]. Here's why I'm reaching out:
+I'm racing this season in the [Championship Name] and I'm reaching out to a small number of local businesses in [Sector Hook] who could benefit from what we're building.
 
-Companies in the [Sector] sector are using motorsport to get in front of [Audience Size]+ fans per event — positioning themselves around [Sector Hook]. And most of them started with a single conversation.
+The reason I chose [Business Name] specifically: companies in your space are starting to use motorsport as a platform to stand out, build loyalty, and get in front of [Audience Size]+ engaged fans per event. And most of them started with a single conversation.
 
-I have one partnership spot left that would be a natural fit for [Business Name].
+I'm not sending a pitch. I'd love to have a quick 10-minute discovery call to understand what [Business Name] is working toward this year — and whether there's even a fit worth exploring.
 
-Would you be open to a 10-minute call this week to see if it makes sense?
-
-No pitch. No pressure. Just a conversation.
+No commitment. No pressure. Just a conversation between two local businesses.
 
 Best regards,
 [Rider Name]""",
 
-    "LI Msg 1: Connect": """Hi [Contact Name],
+    "LI Msg 1: Connect": """Hi [Contact Name], I'm a local [Championship Name] competitor based in [Town]. I'm connecting with a few forward-thinking [Sector] businesses in the area to explore mutual benefits. Would be great to connect.""",
 
-I’m currently competing in [Championship Name] — [Audience Size]+ fans per event, live coverage, the works.
+    "LI Msg 2: Thanks for connecting (Day 2)": """[Contact Name] — Appreciate the connection.
 
-I noticed [Business Name] operates in the [Sector] space. Here’s why that matters:
+Quick intro: I compete in the [Championship Name] this season. [Audience Size]+ fans per event, live coverage, and strong local following.
 
-Your competitors are starting to use motorsport to stand out. The ones that get in early own the category. The ones that wait… blend in.
+I've been connecting with businesses in [Sector Hook] because there's a real opportunity for the right partner to own that space in the motorsport world — before your competitors do.
 
-I have a few partnership options specifically for [Sector Hook] businesses that want to be seen as the go-to in their market.
-
-Would it be worth a quick chat to see if there’s a fit?
+Not pitching anything. Genuinely curious — has [Business Name] ever explored using sport as a marketing channel?
 
 [Rider Name]""",
 
-    "LI Msg 2: Reminder (Day 2)": """Hi [Contact Name],
+    "LI Msg 3: Homework (Day 7)": """Hi [Contact Name],
 
-Quick follow-up — I know messages pile up.
+I've been doing some homework on [Business Name] and I can see you're doing impressive things in [Sector Hook].
 
-Here’s the short version: I race in the [Championship Name]. Our partners get their brand in front of [Audience Size]+ people per event.
+The reason I'm reaching out: I'm racing in [Championship Name] this season, and our partners don't just get a logo on a bike. They get:
 
-One question: Has [Business Name] ever explored sponsorship as a way to reach new customers, or is it completely new territory?
+• Their brand in front of [Audience Size]+ engaged fans per event
+• VIP hospitality they can use as a client incentive or team reward
+• Content and stories they can use across their own marketing
 
-Either way, I’ve got some ideas that might surprise you.
+I noticed your competitors aren't doing this yet. That's exactly why the timing is right.
 
-[Rider Name]""",
-
-    "LI Msg 3: Opportunities (Day 7)": """[Contact Name],
-
-I wanted to share exactly what our [Current Year] partners are getting — because it’s not just a logo on a bike.
-
-This season I’m focusing solely on [Championship Name], allowing me to concentrate fully on achieving [Season Goal]. Last season in [Previous Champ]: [Achievements].
-
-Here’s what’s on the table for partners:
-
-1. VIP Race Day Experience — Use it as a sales incentive, client reward, or team-building event.
-2. On-Site Meet & Greet — I bring the race bike to your office. Your team gets a story they’ll tell for months.
-3. Trackside Branding — [Audience Size] attendees per event + streamed to [TV Viewers] viewers. That’s eyeballs you can’t buy with a Google ad.
-
-Most businesses that say “yes” tell me they wish they’d done it sooner.
-
-Worth 10 minutes to explore?
+Would 10 minutes be worth exploring whether there's a fit?
 
 [Rider Name]""",
 
-    "LI Msg 4: Value (Day 14)": """Hi [Contact Name],
+    "LI Msg 4: Momentum (Day 14)": """[Contact Name],
 
-I’ll keep this short.
+Quick update — I'm deep into pre-season preparation for [Championship Name] and we're locking in the final partnership spots.
 
-Three reasons [Business Name] should consider a motorsport partnership:
+Last season in [Previous Champ]: [Achievements]. This year the goal is [Season Goal].
 
-1. Your competitors aren’t doing it yet. First-mover advantage is real.
-2. [Audience Size]+ engaged fans per event who actually pay attention (not scrolling past like a social media ad).
-3. You get hospitality, content, and brand placement — all in one package.
+I keep coming back to [Business Name] because I genuinely think there's a strong alignment. Here's what forward-thinking [Sector] businesses are doing with motorsport:
 
-The question isn’t “can we afford to do this?” — it’s “can we afford NOT to, when our competitors eventually will?”
+1. Using race days as client hospitality — beats a round of golf every time
+2. Getting exclusive content for their marketing — behind-the-scenes, race day stories
+3. Building staff engagement — race bike visits to the office, team experiences
 
-I have capacity for one more partner this season. Happy to walk you through how it works — zero commitment, just a conversation.
-
-[Rider Name]""",
-
-    "LI Msg 5: Unique Offer (Day 21)": """Hi [Contact Name],
-
-We’re locking in the final partner spots for the [Championship Name] season. Once they’re gone, they’re gone until next year.
-
-I’ve recently launched my [Team Name] with options ranging from supporter-level access all the way up to VIP — including having your name on my race helmet.
-
-But the real opportunity is a tailored partnership built around [Business Name]’s specific goals — whether that’s customer acquisition, team engagement, or brand visibility.
-
-I have 2 spots left. A quick 10-minute call and I can walk you through exactly what would work for you.
-
-Worth a chat?
+I'd rather have one great partner than ten average ones. Is that conversation still worth having?
 
 [Rider Name]""",
 
-    "LI Msg 6: Final Nudge (Day 28)": """Hi [Contact Name],
+    "LI Msg 5: Scarcity (Day 21)": """Hi [Contact Name],
 
-This is my last message on this.
+Honest update: I have 2 partnership spots remaining for the [Championship Name] season.
 
-I’ve reached out a few times because I genuinely believe [Business Name] would be a great fit. But I also respect your time.
+Once they're filled, the opportunity is gone until next year.
 
-If the answer is “not right now” — completely fine. Just let me know and I’ll stop following up.
+I've launched [Team Name] with options from supporter-level all the way to title partnership. But the real value is in building something tailored around what [Business Name] actually needs — whether that's new customer acquisition, team engagement, or competitive differentiation.
 
-If the answer is “maybe, I just haven’t had time” — reply with “interested” and I’ll send you a one-page summary. No call needed.
+Here's my question: if I could show you exactly how this works in 10 minutes, would that be worth your time?
 
-Either way, I’d rather know than guess.
+No pressure either way.
 
-Thanks for your time, [Contact Name].
+[Rider Name]""",
+
+    "LI Msg 6: Final (Day 28)": """[Contact Name],
+
+This is my last follow-up.
+
+I've reached out because I believe [Business Name] would be a strong fit. But I respect your time.
+
+If the answer is "not right now" — no problem at all. Just let me know and I'll stop.
+
+If it's "interested but haven't had time" — reply with "interested" and I'll send a one-page overview. No call needed.
+
+Either way, I'd rather know than guess.
 
 [Rider Name]""",
 
@@ -1331,11 +1311,11 @@ if current_tab == "📊 Active Campaign":
             _MSG_SEQUENCE = [
                 "Email: Cold Opener",
                 "LI Msg 1: Connect",
-                "LI Msg 2: Reminder",
-                "LI Msg 3: Opportunities",
-                "LI Msg 4: Value",
-                "LI Msg 5: Unique Offer",
-                "LI Msg 6: Final Nudge"
+                "LI Msg 2: Thanks for connecting (Day 2)",
+                "LI Msg 3: Homework (Day 7)",
+                "LI Msg 4: Momentum (Day 14)",
+                "LI Msg 5: Scarcity (Day 21)",
+                "LI Msg 6: Final (Day 28)"
             ]
             
             events = []
@@ -2268,11 +2248,11 @@ Supply a source URL for every data point. Do not guess emails."""
                         seq_options = [
                             "Email: Cold Opener",
                             "LI Msg 1: Connect",
-                            "LI Msg 2: Reminder (Day 2)",
-                            "LI Msg 3: Opportunities (Day 7)",
-                            "LI Msg 4: Value (Day 14)",
-                            "LI Msg 5: Unique Offer (Day 21)",
-                            "LI Msg 6: Final Nudge (Day 28)"
+                            "LI Msg 2: Thanks for connecting (Day 2)",
+                            "LI Msg 3: Homework (Day 7)",
+                            "LI Msg 4: Momentum (Day 14)",
+                            "LI Msg 5: Scarcity (Day 21)",
+                            "LI Msg 6: Final (Day 28)"
                         ]
                         
                         # Auto-select to the next step based on last sent
