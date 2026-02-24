@@ -1977,6 +1977,9 @@ Supply a source URL for every data point. Do not guess emails."""
                             st.write("") # Spacer
                             st.write("") 
                             if st.button("Mark as Sent & Schedule"):
+                                # 🎈 Fire balloons FIRST so the animation starts immediately
+                                st.balloons()
+                                
                                 # 2. Update DB using decided date
                                 db.update_lead_status(lead['id'], "Active", final_date)
                                 
@@ -1994,9 +1997,8 @@ Supply a source URL for every data point. Do not guess emails."""
                                 mark_notes['last_template'] = tpl
                                 db.update_lead_notes(lead['id'], mark_notes)
                             
-                                st.balloons()
-                                st.success(f"Message Logged! 📅 Next follow-up on {final_date}.")
-                                time.sleep(2)
+                                st.success(f"🎉 Message Logged! 📅 Next follow-up on {final_date}.")
+                                time.sleep(3)
                                 st.rerun()
                     
                     else:
