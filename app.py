@@ -2682,13 +2682,12 @@ if current_tab == "✉️ Outreach Assistant":
                 st.markdown("---")
                 st.markdown("##### 🔎 Research Steps — Find the Decision Maker")
                 
-                # --- STEP 1: Company Records (Directors) ---
-                step1_done = has_contact or has_directors
-                step1_icon = "✅" if step1_done else "1️⃣"
+                # --- STAGE 1: Find the Company & Directors ---
+                stage1_done = has_contact or has_directors
+                stage1_icon = "✅" if stage1_done else "🔍"
                 
-                with st.expander(f"{step1_icon} **Step 1: Find Directors & Owners**", expanded=not step1_done):
+                with st.expander(f"{stage1_icon} **Stage 1: Find the Company & Directors**", expanded=not stage1_done):
                     if has_directors:
-                        # Show what we found
                         ch_dirs = lead_notes_data.get('ch_directors', [])
                         ch_pscs = lead_notes_data.get('ch_pscs', [])
                         if ch_pscs:
@@ -2698,66 +2697,69 @@ if current_tab == "✉️ Outreach Assistant":
                             for d in ch_dirs:
                                 role = d.get('role', '').replace('-', ' ').title()
                                 st.markdown(f"📋 {d['name']} — {role}")
-                        ch_num = lead_notes_data.get('ch_company_number', '')
-                        if ch_num:
-                            ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}"
-                            st.markdown(f"[View full record on Companies House →]({ch_url})")
+                        st.markdown("---")
                     elif has_contact:
                         st.success(f"Apollo found: **{clean_contact}**")
-                    else:
-                        st.markdown("Search for who owns and runs this company:")
+                        st.markdown("---")
                     
-                    s1_c1, s1_c2 = st.columns(2)
+                    st.markdown("**Search these sources to find who runs this company:**")
+                    
+                    s1_c1, s1_c2, s1_c3 = st.columns(3)
                     with s1_c1:
                         if is_uk:
                             ch_num = lead_notes_data.get('ch_company_number', '')
                             if ch_num:
                                 ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}"
-                                st.markdown(f"🏛️ **[Open Companies House →]({ch_url})**")
+                                st.markdown(f"🏛️ **[Companies House →]({ch_url})**")
                             else:
                                 ch_search = f"https://find-and-update.company-information.service.gov.uk/search?q={biz_name_encoded}"
-                                st.markdown(f"🏛️ **[Search Companies House →]({ch_search})**")
-                            st.caption("Find directors, owners & company filings (UK)")
+                                st.markdown(f"🏛️ **[Companies House →]({ch_search})**")
+                            st.caption("Directors, owners & filings (UK)")
                         else:
                             oc_search = f"https://opencorporates.com/companies?q={biz_name_encoded}"
-                            st.markdown(f"🌍 **[Search OpenCorporates →]({oc_search})**")
-                            st.caption("Find directors & company filings (Worldwide)")
+                            st.markdown(f"🌍 **[OpenCorporates →]({oc_search})**")
+                            st.caption("Directors & filings (Worldwide)")
                     with s1_c2:
-                        st.caption("💡 **Tip:** Look for the Managing Director, CEO, or Owner. Copy their name into the contact field below.")
-                
-                # --- STEP 2: Company LinkedIn Page ---
-                step2_done = has_linkedin
-                step2_icon = "✅" if step2_done else "2️⃣"
-                
-                with st.expander(f"{step2_icon} **Step 2: Find Company LinkedIn Page**", expanded=not step2_done and step1_done):
-                    if has_linkedin and 'company' in lead_notes_data.get('contact_url', ''):
-                        st.success(f"Company LinkedIn found: [{lead_notes_data['contact_url']}]({lead_notes_data['contact_url']})")
+                        li_company = f"https://www.linkedin.com/search/results/companies/?keywords={biz_name_encoded}"
+                        st.markdown(f"🏢 **[LinkedIn Company →]({li_company})**")
+                        st.caption("Company page → People tab")
+                    with s1_c3:
+                        fb_company = f"https://www.facebook.com/search/pages/?q={biz_name_encoded}"
+                        st.markdown(f"📘 **[Facebook Company →]({fb_company})**")
+                        st.caption("Business page → About section")
                     
-                    li_company = f"https://www.linkedin.com/search/results/companies/?keywords={biz_name_encoded}"
-                    st.markdown(f"🏢 **[Search LinkedIn for Company →]({li_company})**")
-                    st.caption("Find their company page → check the 'People' tab → see who works there")
+                    st.caption("💡 **Tip:** Find the MD, CEO, or Owner → type their name in the contact field below.")
                 
-                # --- STEP 3: Company Facebook Page ---
-                step3_icon = "3️⃣"
-                with st.expander(f"{step3_icon} **Step 3: Find Company on Facebook**", expanded=False):
-                    fb_company = f"https://www.facebook.com/search/pages/?q={biz_name_encoded}"
-                    st.markdown(f"📘 **[Search Facebook for Company →]({fb_company})**")
-                    st.caption("Find the business page → check 'About' for owner details or message directly")
-                
-                # --- STEP 4: LinkedIn People Search (only when you have a name) ---
+                # --- STAGE 2: Find the Director's Profile ---
                 if has_contact and clean_contact:
-                    step4_icon = "4️⃣"
-                    with st.expander(f"{step4_icon} **Step 4: Find {clean_contact} on LinkedIn**", expanded=True):
-                        li_person = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(clean_contact)}"
-                        li_person_co = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(clean_contact + ' ' + lead['Business Name'])}"
-                        st.markdown(f"👔 **[Search for {clean_contact} →]({li_person})**")
-                        st.markdown(f"🎯 **[Search {clean_contact} at {lead['Business Name']} →]({li_person_co})**")
-                        st.caption("Find their profile → Send Connect Request → Use our message template")
+                    contact_encoded = urllib.parse.quote_plus(clean_contact)
+                    contact_and_co = urllib.parse.quote_plus(f"{clean_contact} {lead['Business Name']}")
+                    
+                    with st.expander(f"👤 **Stage 2: Find {clean_contact}'s Profile**", expanded=True):
+                        st.markdown(f"**Now find {clean_contact}'s profile to connect with them:**")
+                        
+                        s2_c1, s2_c2 = st.columns(2)
+                        with s2_c1:
+                            li_person = f"https://www.linkedin.com/search/results/people/?keywords={contact_encoded}"
+                            st.markdown(f"👔 **[Search LinkedIn for {clean_contact} →]({li_person})**")
+                            
+                            li_xray = f"https://www.linkedin.com/search/results/people/?keywords={biz_name_encoded}&origin=FACETED_SEARCH"
+                            st.markdown(f"🔎 **[X-ray: People at {lead['Business Name']} →]({li_xray})**")
+                        
+                        with s2_c2:
+                            google_news = f"https://www.google.com/search?q={contact_and_co}"
+                            st.markdown(f"📰 **[Google: {clean_contact} + {lead['Business Name']} →]({google_news})**")
+                            st.caption("Find articles, news, interviews")
+                            
+                            fb_person = f"https://www.facebook.com/search/people/?q={contact_encoded}"
+                            st.markdown(f"📘 **[Facebook: {clean_contact} →]({fb_person})**")
+                        
+                        st.caption("🎯 **Goal:** Find their LinkedIn profile → Send Connect Request → Use your message template")
                 else:
-                    with st.expander("4️⃣ **Step 4: Find Person on LinkedIn** *(enter name first)*", expanded=False):
-                        st.caption("👆 Add a contact name above from Steps 1-3, then this link will appear")
+                    with st.expander("👤 **Stage 2: Find Director's Profile** *(enter name first)*", expanded=False):
+                        st.caption("👆 Add a contact name from Stage 1, then search links will appear here.")
                         li_people_generic = f"https://www.linkedin.com/search/results/people/?keywords={biz_name_encoded}"
-                        st.markdown(f"Or try: [Search people at {lead['Business Name']}]({li_people_generic})")
+                        st.markdown(f"Or browse: **[People at {lead['Business Name']} on LinkedIn →]({li_people_generic})**")
                 
                 # Editable contact fields
                 st.caption("Edit contact details:")
