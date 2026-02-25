@@ -250,13 +250,13 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 quality_score += 1  # Very local (within 25 miles)
             if 5 <= reviews_count <= 500:
                 quality_score += 1  # Right size (not too small, not a chain)
-            if item.get("rating", 0) >= 4.0:
+            if (item.get("rating") or 0) >= 4.0:
                 quality_score += 1  # Well-rated business
             
             mapped_results.append({
                 "Business Name": name,
                 "Address": item.get("full_address", item.get("address", "")),
-                "Rating": item.get("rating", 0.0),
+                "Rating": item.get("rating") or 0.0,
                 "Sector": item.get("category", item.get("type", "Search Result")),
                 "Website": website,
                 "Phone": phone,
