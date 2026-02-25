@@ -2388,7 +2388,7 @@ if current_tab == "✉️ Outreach Assistant":
                 
                 # Editable contact fields
                 st.caption("Edit contact details:")
-                edit_c1, edit_c2, edit_c3 = st.columns([2, 1, 2])
+                edit_c1, edit_c2, edit_c3, edit_c4 = st.columns([2, 1, 2, 2])
                 with edit_c1:
                     new_name = st.text_input("Contact Name", value=contact_name_raw, key=f"contact_name_input_{lead['id']}")
                 with edit_c2:
@@ -2397,10 +2397,13 @@ if current_tab == "✉️ Outreach Assistant":
                     sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
                     contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
                 with edit_c3:
+                    saved_email = lead_notes_data.get('email', '')
+                    contact_email = st.text_input("Email", value=saved_email, key=f"email_{lead['id']}", placeholder="name@company.com")
+                with edit_c4:
                     saved_url = lead_notes_data.get('contact_url', '')
                     contact_url = st.text_input("LinkedIn URL", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
                 
-                if new_name != contact_name_raw or contact_url != saved_url:
+                if new_name != contact_name_raw or contact_url != saved_url or contact_email != saved_email:
                     if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
                         if new_name:
                             # Auto-fix ALL CAPS names from Companies House
@@ -2410,6 +2413,7 @@ if current_tab == "✉️ Outreach Assistant":
                             save_notes = lead_notes_data.copy()
                             save_notes['salutation'] = contact_salutation
                             save_notes['contact_url'] = contact_url
+                            save_notes['email'] = contact_email
                             db.update_lead_notes(lead['id'], save_notes)
                             st.toast(f"✅ Saved: {contact_salutation} {new_name}")
                             time.sleep(0.5)
