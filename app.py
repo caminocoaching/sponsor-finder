@@ -256,6 +256,22 @@ def calendar_contact_card(lead_id):
     contact_name = lead.get('Contact Name', '') or ''
     contact_url = lead_notes.get('contact_url', '')
     salutation = lead_notes.get('salutation', 'Mr')
+    contact_email = lead_notes.get('email', '')
+    contact_phone = lead.get('Phone', '') or lead_notes.get('phone', '')
+    contact_role = lead_notes.get('contact_title', '') or ''
+    if not contact_role:
+        # Try extracting from name in parentheses: "John Smith (Director)"
+        raw_name = lead.get('Contact Name', '') or ''
+        if '(' in raw_name and ')' in raw_name:
+            contact_role = raw_name[raw_name.index('(')+1:raw_name.index(')')].strip()
+    
+    # Split name
+    clean_name = contact_name.strip()
+    if '(' in clean_name:
+        clean_name = clean_name[:clean_name.index('(')].strip()
+    name_parts = clean_name.split() if clean_name else []
+    first_name = name_parts[0] if name_parts else ''
+    last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
     
     # Determine current sequence step
     seq_options = [
@@ -276,33 +292,98 @@ def calendar_contact_card(lead_id):
     
     is_sequence_done = last_sent_step >= len(seq_options) - 1
     
-    # --- HEADER ---
-    st.markdown(f"### {contact_name or lead['Business Name']}")
-    head_c1, head_c2 = st.columns([2, 1])
-    with head_c1:
-        st.caption(f"🏢 {lead['Business Name']}  •  {lead.get('Sector', '')}")
-        if is_sequence_done:
-            st.success("✅ Full sequence complete")
+    # ============================================
+    # CONTACT CARD — ONE-STOP SHOP
+    # ============================================
+    
+    # --- ROW 1: Name & Company ---
+    st.markdown(f"### {salutation} {first_name} {last_name}".strip())
+    
+    card_c1, card_c2 = st.columns([3, 2])
+    with card_c1:
+        st.markdown(f"🏢 **{lead['Business Name']}**")
+        if contact_role:
+            st.caption(f"💼 {contact_role}")
+        if lead.get('Sector'):
+            st.caption(f"📂 {lead['Sector']}")
+    with card_c2:
+        if contact_email:
+            st.markdown(f"📧 [{contact_email}](mailto:{contact_email})")
         else:
-            st.info(f"📍 Stage: **{seq_options[current_step_idx]}**")
-    with head_c2:
-        st.caption(f"Status: **{lead.get('Status', 'Pipeline')}**")
-        if lead.get('Next Action'):
-            st.caption(f"📅 Follow-up: {lead.get('Next Action', '')}")
+            st.caption("📧 No email")
+        if contact_phone:
+            st.markdown(f"📞 {contact_phone}")
+        if contact_url:
+            st.markdown(f"🔗 [LinkedIn Profile →]({contact_url})")
+        else:
+            st.caption("🔗 No LinkedIn URL")
     
-    contact_email = lead_notes.get('email', '')
+    st.markdown("---")
     
-    # --- PROFILE URL & EMAIL ---
-    link_parts = []
-    if contact_email:
-        link_parts.append(f"📧 [{contact_email}](mailto:{contact_email})")
-    if contact_url:
-        link_parts.append(f"🔗 [Open Profile → Message Now]({contact_url})")
+    # --- ROW 2: Pipeline Progress ---
+    status = lead.get('Status', 'Pipeline')
     
-    if link_parts:
-        st.markdown("  •  ".join(link_parts))
+    # Define the full pipeline stages
+    pipeline_stages = ["Connect", "Discovery Call", "Proposal", "Secured"]
+    
+    # Map status to pipeline position
+    if status in ('Pipeline', 'Active'):
+        current_pipeline = 0  # Connect
+    elif status == 'Call Booked':
+        current_pipeline = 1  # Discovery Call
+    elif status in ('Discovery Call',):
+        current_pipeline = 1
+    elif status == 'Proposal':
+        current_pipeline = 2
+    elif status == 'Secured':
+        current_pipeline = 3
     else:
-        st.caption("⚠️ No email or profile URL saved — add one in the Outreach Assistant")
+        current_pipeline = 0
+    
+    # Build progress line
+    progress_parts = []
+    for i, stage_name in enumerate(pipeline_stages):
+        if i < current_pipeline:
+            progress_parts.append(f"✅ ~~{stage_name}~~")  # Completed
+        elif i == current_pipeline:
+            progress_parts.append(f"**▶ {stage_name}**")   # Current
+        else:
+            progress_parts.append(f"⬜ {stage_name}")      # Future
+    
+    st.markdown(" → ".join(progress_parts))
+    
+    # Connect sub-steps (message sequence)
+    if current_pipeline == 0:
+        step_parts = []
+        for i, step in enumerate(seq_options):
+            short = step.split(":")[0].strip()
+            if i <= last_sent_step:
+                step_parts.append(f"✅ {short}")
+            elif i == current_step_idx:
+                step_parts.append(f"**▶ {short}**")
+            else:
+                step_parts.append(f"⬜ {short}")
+        st.caption(" · ".join(step_parts))
+    
+    # --- ROW 3: Next Action ---
+    next_action = lead.get('Next Action', '')
+    na1, na2 = st.columns([1, 1])
+    with na1:
+        if next_action:
+            st.metric("📅 Next Contact", str(next_action))
+        else:
+            st.metric("📅 Next Contact", "Not scheduled")
+    with na2:
+        if current_pipeline == 0 and not is_sequence_done:
+            st.metric("📨 Next Step", seq_options[current_step_idx].split(":")[0])
+        elif is_sequence_done:
+            st.metric("📨 Next Step", "Book Discovery Call")
+        elif current_pipeline == 1:
+            st.metric("📨 Next Step", "Run Discovery Call")
+        elif current_pipeline == 2:
+            st.metric("📨 Next Step", "Send Proposal")
+        else:
+            st.metric("📨 Next Step", "✅ Secured!")
     
     st.divider()
     
