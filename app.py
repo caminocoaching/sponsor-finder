@@ -10,7 +10,7 @@ import json
 from search_service import mock_search_places, search_google_places, search_google_legacy_nearby, search_outscraper
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
-from enrichment_service import search_apollo_people, extract_domain, find_linkedin_company_page
+from enrichment_service import search_apollo_people, search_outscraper_contacts, extract_domain, find_linkedin_company_page
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
@@ -311,11 +311,12 @@ def calendar_contact_card(lead_id):
         
         # Schedule next follow-up
         def_days = 2
-        if "Msg 2" in current_template: def_days = 5
+        if "Connect" in current_template: def_days = 2
+        elif "Msg 1" in current_template: def_days = 5
+        elif "Msg 2" in current_template: def_days = 7
         elif "Msg 3" in current_template: def_days = 7
         elif "Msg 4" in current_template: def_days = 7
-        elif "Msg 5" in current_template: def_days = 7
-        elif "Msg 6" in current_template: def_days = 7
+        elif "Msg 5" in current_template: def_days = 30
         
         auto_date = datetime.now() + timedelta(days=def_days)
         
@@ -356,16 +357,20 @@ def calendar_contact_card(lead_id):
         st.markdown("- Move to Proposal stage")
         st.markdown("- Or mark as Not Interested")
         
-        fc1, fc2, fc3 = st.columns(3)
+        fc1, fc2, fc3, fc4 = st.columns(4)
         with fc1:
-            if st.button("📞 Move to Discovery", key=f"card_disc_{lead_id}"):
-                db.update_lead_status(lead_id, "Discovery Call")
+            if st.button("📅 Call Booked", key=f"card_call_{lead_id}"):
+                db.update_lead_status(lead_id, "Call Booked")
                 st.rerun()
         with fc2:
-            if st.button("📋 Move to Proposal", key=f"card_prop_{lead_id}"):
-                db.update_lead_status(lead_id, "Proposal")
+            if st.button("📞 Discovery Call", key=f"card_disc_{lead_id}"):
+                db.update_lead_status(lead_id, "Discovery Call")
                 st.rerun()
         with fc3:
+            if st.button("📋 Proposal", key=f"card_prop_{lead_id}"):
+                db.update_lead_status(lead_id, "Proposal")
+                st.rerun()
+        with fc4:
             if st.button("❌ Not Interested", key=f"card_ni_{lead_id}"):
                 db.update_lead_status(lead_id, "Not Interested")
                 st.rerun()
@@ -400,110 +405,110 @@ def calendar_contact_card(lead_id):
 TEMPLATES = {
     "Email: Cold Opener": """Good morning [Contact Name],
 
-My name is [Rider Name] and I'm based in [Town], close to your area.
+My name is [Rider Name] and I am based in [Town], close to your area.
 
-I'm racing this season in the [Championship Name] and I'm reaching out to a small number of local businesses in [Sector Hook] who could benefit from what we're building.
+I am racing this season in the [Championship Name] and I am reaching out to a small number of local businesses in [Sector Hook] who could benefit from what we are building.
 
-The reason I chose [Business Name] specifically: companies in your space are starting to use motorsport as a platform to stand out, build loyalty, and get in front of [Audience Size]+ engaged fans per event. And most of them started with a single conversation.
+The reason I chose [Business Name] specifically: companies in your space are starting to use motorsport as a platform to stand out, build loyalty, and get in front of [Audience Size]+ engaged fans per event. Most of them started with a single conversation.
 
-I'm not sending a pitch. I'd love to have a quick 10-minute discovery call to understand what [Business Name] is working toward this year — and whether there's even a fit worth exploring.
+I am not sending a pitch. I would love to have a quick 10-minute discovery call to understand what [Business Name] is working toward this year and whether there is even a fit worth exploring.
 
 No commitment. No pressure. Just a conversation between two local businesses.
 
 Best regards,
 [Rider Name]""",
 
-    "LI Msg 1: Connect": """Hi [Contact Name], I'm a local [Championship Name] competitor based in [Town]. I'm connecting with a few forward-thinking [Sector] businesses in the area to explore mutual benefits. Would be great to connect.""",
+    "LI Connect: Request": """Hi [Contact Name], great to connect with you on here. Being local to [Town], it would be great to connect and see if there is a mutual benefit for us both this year.""",
 
-    "LI Msg 2: Thanks for connecting (Day 2)": """[Contact Name] — Appreciate the connection.
+    "LI Msg 1: Intro (Day 2)": """[Contact Name], appreciate the connection.
 
-Quick intro: I compete in the [Championship Name] this season. [Audience Size]+ fans per event, live coverage, and strong local following.
+Quick intro: I compete in the [Championship Name] this season. [Audience Size]+ fans per event, live coverage, and a strong local following.
 
-I've been connecting with businesses in [Sector Hook] because there's a real opportunity for the right partner to own that space in the motorsport world — before your competitors do.
+I have been connecting with businesses in [Sector Hook] because there is a real opportunity for the right partner to own that space in the motorsport world before your competitors do.
 
-Not pitching anything. Genuinely curious — has [Business Name] ever explored using sport as a marketing channel?
-
-[Rider Name]""",
-
-    "LI Msg 3: Homework (Day 7)": """Hi [Contact Name],
-
-I've been doing some homework on [Business Name] and I can see you're doing impressive things in [Sector Hook].
-
-The reason I'm reaching out: I'm racing in [Championship Name] this season, and our partners don't just get a logo on a bike. They get:
-
-• Their brand in front of [Audience Size]+ engaged fans per event
-• VIP hospitality they can use as a client incentive or team reward
-• Content and stories they can use across their own marketing
-
-I noticed your competitors aren't doing this yet. That's exactly why the timing is right.
-
-Would 10 minutes be worth exploring whether there's a fit?
+Not pitching anything. Genuinely curious, has [Business Name] ever explored using sport as a marketing channel?
 
 [Rider Name]""",
 
-    "LI Msg 4: Momentum (Day 14)": """[Contact Name],
+    "LI Msg 2: Homework (Day 7)": """Hi [Contact Name],
 
-Quick update — I'm deep into pre-season preparation for [Championship Name] and we're locking in the final partnership spots.
+I have been doing some homework on [Business Name] and I can see you are doing impressive things in [Sector Hook].
+
+The reason I am reaching out: I am racing in [Championship Name] this season, and our partners do not just get a logo on a car. They get:
+
+- Their brand in front of [Audience Size]+ engaged fans per event
+- VIP hospitality they can use as a client incentive or team reward
+- Content and stories they can use across their own marketing
+
+I noticed your competitors are not doing this yet. That is exactly why the timing is right.
+
+Would 10 minutes be worth exploring whether there is a fit?
+
+[Rider Name]""",
+
+    "LI Msg 3: Momentum (Day 14)": """[Contact Name],
+
+Quick update. I am deep into pre-season preparation for [Championship Name] and we are locking in the final partnership spots.
 
 Last season in [Previous Champ]: [Achievements]. This year the goal is [Season Goal].
 
-I keep coming back to [Business Name] because I genuinely think there's a strong alignment. Here's what forward-thinking [Sector] businesses are doing with motorsport:
+I keep coming back to [Business Name] because I genuinely think there is a strong alignment. Here is what forward-thinking [Sector] businesses are doing with motorsport:
 
-1. Using race days as client hospitality — beats a round of golf every time
-2. Getting exclusive content for their marketing — behind-the-scenes, race day stories
-3. Building staff engagement — race bike visits to the office, team experiences
+1. Using race days as client hospitality, it beats a round of golf every time
+2. Getting exclusive content for their marketing, behind-the-scenes, race day stories
+3. Building staff engagement, team experiences and paddock access
 
-I'd rather have one great partner than ten average ones. Is that conversation still worth having?
+I would rather have one great partner than ten average ones. Is that conversation still worth having?
 
 [Rider Name]""",
 
-    "LI Msg 5: Scarcity (Day 21)": """Hi [Contact Name],
+    "LI Msg 4: Scarcity (Day 21)": """Hi [Contact Name],
 
 Honest update: I have 2 partnership spots remaining for the [Championship Name] season.
 
-Once they're filled, the opportunity is gone until next year.
+Once they are filled, the opportunity is gone until next year.
 
-I've launched [Team Name] with options from supporter-level all the way to title partnership. But the real value is in building something tailored around what [Business Name] actually needs — whether that's new customer acquisition, team engagement, or competitive differentiation.
+I have launched [Team Name] with options from supporter-level all the way to title partnership. But the real value is in building something tailored around what [Business Name] actually needs, whether that is new customer acquisition, team engagement, or competitive differentiation.
 
-Here's my question: if I could show you exactly how this works in 10 minutes, would that be worth your time?
+Here is my question: if I could show you exactly how this works in 10 minutes, would that be worth your time?
 
 No pressure either way.
 
 [Rider Name]""",
 
-    "LI Msg 6: Final (Day 28)": """[Contact Name],
+    "LI Msg 5: Final (Day 28)": """[Contact Name],
 
 This is my last follow-up.
 
-I've reached out because I believe [Business Name] would be a strong fit. But I respect your time.
+I have reached out because I believe [Business Name] would be a strong fit. But I respect your time.
 
-If the answer is "not right now" — no problem at all. Just let me know and I'll stop.
+If the answer is "not right now", no problem at all. Just let me know and I will stop.
 
-If it's "interested but haven't had time" — reply with "interested" and I'll send a one-page overview. No call needed.
+If it is "interested but have not had time", reply with "interested" and I will send a one-page overview. No call needed.
 
-Either way, I'd rather know than guess.
+Either way, I would rather know than guess.
 
 [Rider Name]""",
 
     "Initial Contact": """(See Email: Cold Opener above)""",
-    "Follow Up": """(See LI Msg 2 or others)""",
+    "Follow Up": """(See LI Msg 1 or others)""",
     "Proposal": """[Contact Name],
 
-No fluff — here’s exactly what I’m proposing based on our conversation.
+Here is exactly what I am proposing based on our conversation.
 
 **The Goal for [Business Name]:**
-You told me you’re focused on [Goal Answer]. Everything below is built around that.
+You told me you are focused on [Goal Answer]. Everything below is built around that.
 
 **The Plan:**
-• Audience: [Audience Answer] — this is who sees your brand every race weekend
-• Activation: Logo placement + social media campaign + hospitality access
+- Audience: [Audience Answer], this is who sees your brand every race weekend
+- Activation: Logo placement + social media campaign + hospitality access
 
 **Why This Works:**
-This directly solves your need for [Success Answer] — and it does it in a way your competitors aren’t.
+This directly solves your need for [Success Answer] and it does it in a way your competitors are not.
 
-The proposal deck is attached. I’ve kept it simple on purpose.
+The proposal deck is attached. I have kept it simple on purpose.
 
-Next step: You tell me what you’d change. I’ll adjust and we lock it in.
+Next step: you tell me what you would change. I will adjust and we lock it in.
 
 [Rider Name]"""
 }
@@ -678,32 +683,35 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
         rep_name = extra_context.get("rep_name", "Manager")
         rep_role = extra_context.get("rep_role", "Manager")
         
-        # 1. Intro Override
-        # "My name is [Rider Name]" -> "My name is [Rep Name] and I am the [Role] of [Rider Name]"
-        target_intro = f"My name is {rider_name}"
-        new_intro = f"My name is {rep_name} and I am the {rep_role} of {rider_name}"
+        # 1. Intro Override (Email)
+        target_intro = f"My name is {rider_name} and I am based in"
+        new_intro = f"My name is {rep_name} and I am the {rep_role} of {rider_name}. We are based in"
         msg = msg.replace(target_intro, new_intro)
         
+        # Fallback for other intro patterns
+        target_intro_2 = f"My name is {rider_name}"
+        new_intro_2 = f"My name is {rep_name} and I am the {rep_role} of {rider_name}"
+        msg = msg.replace(target_intro_2, new_intro_2)
+        
         # 2. Activity Pronoun Overrides
-        # List of phrases where "I" refers to the Rider performing the sport
         substitutions = [
-            ("I am racing", f"{rider_name} is racing"),
-            ("I'm currently competing", f"{rider_name} is currently competing"),
-            ("I am currently competing", f"{rider_name} is currently competing"),
-            ("I’ve recently launched my", f"{rider_name} has recently launched their"),
+            ("I am racing this season", f"{rider_name} is racing this season"),
+            ("I am racing in", f"{rider_name} is racing in"),
+            ("I am deep into pre-season", f"{rider_name} is deep into pre-season"),
+            ("I compete in the", f"{rider_name} competes in the"),
+            ("I am reaching out to", f"I am reaching out on behalf of {rider_name} to"),
+            ("I have launched", f"{rider_name} has launched"),
+            ("I have 2 partnership spots", f"{rider_name} has 2 partnership spots"),
+            ("I have reached out because I believe", f"I have reached out because we believe"),
+            ("I would rather have one great", f"{rider_name} would rather have one great"),
             ("my race helmet", f"{rider_name}'s race helmet"),
-            ("I believe we could", "We believe we could"),
             ("expand my network", "expand our network"),
-            ("I’m focusing solely", f"{rider_name} is focusing solely"),
-            ("allowing me to", f"allowing {rider_name} to")
         ]
         
         for old_phrase, new_phrase in substitutions:
             msg = msg.replace(old_phrase, new_phrase)
             
         # 3. Signature Override
-        # Replace the signer (usually at the very end) from Rider Name to Rep Name
-        # We use rsplit to only replace the last occurrence to avoid breaking the text body if name is mentioned there
         if msg.strip().endswith(rider_name):
              msg = rep_name.join(msg.rsplit(rider_name, 1))
 
@@ -1914,13 +1922,54 @@ if current_tab == " Search & Add":
                     # Build enriched notes from search data
                     enriched_notes = {}
                     
-                    # --- NEW: APOLLO.IO ENRICHMENT --- 
+                    # --- OUTSCRAPER CONTACTS ENRICHMENT (replaces Apollo — pay-per-use, no subscription) ---
+                    os_key = st.session_state.user_profile.get("outscraper_key", "")
+                    if os_key and b_web:
+                        st.toast(f"🔎 Looking up contacts for {b_name}...")
+                        domain = extract_domain(b_web)
+                        contact_res = search_outscraper_contacts(os_key, domain)
+
+                        if "error" not in contact_res:
+                            # Emails
+                            if contact_res.get("emails"):
+                                enriched_notes["email"] = contact_res["emails"][0]
+                                enriched_notes["emails"] = contact_res["emails"]
+                                st.success(f"📧 Found email: {contact_res['emails'][0]}")
+
+                            # Phone numbers
+                            if contact_res.get("phones"):
+                                enriched_notes["phones"] = contact_res["phones"]
+                                st.success(f"📞 Found phone: {contact_res['phones'][0]}")
+
+                            # Social links (merge with any from search)
+                            if contact_res.get("social"):
+                                existing_social = enriched_notes.get("social_links", {})
+                                if not isinstance(existing_social, dict):
+                                    existing_social = {}
+                                # Contact enrichment fills gaps
+                                for k, v in contact_res["social"].items():
+                                    if v and not existing_social.get(k):
+                                        existing_social[k] = v
+                                enriched_notes["social_links"] = existing_social
+
+                            # LinkedIn company page
+                            if contact_res.get("linkedin"):
+                                enriched_notes["linkedin_company"] = contact_res["linkedin"]
+                                if not enriched_notes.get("contact_url"):
+                                    enriched_notes["contact_url"] = contact_res["linkedin"]
+                                st.success(f"🔗 Found LinkedIn: {contact_res['linkedin']}")
+
+                            # Site description (useful intel)
+                            if contact_res.get("site_description") and not enriched_notes.get("description"):
+                                enriched_notes["description"] = contact_res["site_description"]
+
+                    # --- APOLLO FALLBACK (only if user has a key and Outscraper didn't find a contact name) ---
                     apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
                     if apollo_key and b_web and not b_contact:
                         st.toast(f"🔎 Searching Apollo.io for {b_name} decision maker...")
                         domain = extract_domain(b_web)
                         apollo_res = search_apollo_people(apollo_key, domain)
-                        
+
                         if "error" not in apollo_res:
                             title_str = apollo_res.get('Title', '')
                             name_str = f"{apollo_res.get('First Name', '')} {apollo_res.get('Last Name', '')}".strip()
@@ -2377,11 +2426,12 @@ Supply a source URL for every data point. Do not guess emails."""
                         with col_d1:
                             # 1. Calculate Standard Timing (Training Doc)
                             def_days = 2
-                            if "Msg 2" in tpl: def_days = 5
+                            if "Connect" in tpl: def_days = 2
+                            elif "Msg 1" in tpl: def_days = 5
+                            elif "Msg 2" in tpl: def_days = 7
                             elif "Msg 3" in tpl: def_days = 7
                             elif "Msg 4" in tpl: def_days = 7
-                            elif "Msg 5" in tpl: def_days = 7
-                            elif "Msg 6" in tpl: def_days = 30
+                            elif "Msg 5" in tpl: def_days = 30
                             
                             auto_date = datetime.now() + timedelta(days=def_days)
                             auto_str = auto_date.strftime("%Y-%m-%d")
@@ -3687,11 +3737,12 @@ Best regards,
                             # Determine which template step they're on
                             seq_options_fu = [
                                 "Email: Cold Opener",
-                                "LI Msg 2: Thanks for connecting (Day 2)",
-                                "LI Msg 3: Homework (Day 7)",
-                                "LI Msg 4: Momentum (Day 14)",
-                                "LI Msg 5: Scarcity (Day 21)",
-                                "LI Msg 6: Final (Day 28)"
+                                "LI Connect: Request",
+                                "LI Msg 1: Intro (Day 2)",
+                                "LI Msg 2: Homework (Day 7)",
+                                "LI Msg 3: Momentum (Day 14)",
+                                "LI Msg 4: Scarcity (Day 21)",
+                                "LI Msg 5: Final (Day 28)"
                             ]
                             
                             last_step = notes.get('outreach_step', -1)
