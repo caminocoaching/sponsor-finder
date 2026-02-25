@@ -17,7 +17,7 @@ if not os.path.exists(_cache_version_file):
     with open(_cache_version_file, "w") as f:
         f.write("cleared")
 
-def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0, google_api_key=None):
+def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0, google_api_key=None, search_terms=None):
     """
     HIGH-PRECISION SEARCH (V3 Strict Mode)
     Optimized for cost efficiency and relevance.
@@ -209,6 +209,30 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             if is_chain:
                 skipped_chain += 1
                 continue
+            
+            # --- RELEVANCE FILTER ---
+            # If we have search terms, verify result is actually relevant
+            # This prevents "Motorcycle Dealer" searches returning bakeries/pubs
+            if search_terms:
+                subtypes = item.get("subtypes") or []
+                if isinstance(subtypes, str):
+                    subtypes = [subtypes]
+                subtypes_upper = " ".join([s.upper() for s in subtypes])
+                desc_upper = (item.get("description") or "").upper()
+                
+                # Build all text to check against
+                all_text = f"{cat_upper} {name_upper} {subtypes_upper} {desc_upper}"
+                
+                # Check if ANY search term word matches
+                # e.g. for "Motorcycle Dealer", check "MOTORCYCLE" and "DEALER"
+                relevance_words = set()
+                for term in search_terms:
+                    for word in term.upper().split():
+                        if len(word) > 3:  # Skip short words like "in", "and"
+                            relevance_words.add(word)
+                
+                if relevance_words and not any(word in all_text for word in relevance_words):
+                    continue  # Skip irrelevant result
 
             # --- EXTRACT DATA FROM OUTSCRAPER SEARCH-V3 ---
             # Fix field names: search-v3 uses 'website' not 'site', 'reviews' may be None

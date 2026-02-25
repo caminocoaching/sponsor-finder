@@ -1647,7 +1647,8 @@ if current_tab == " Search & Add":
                                 radius=search_radius, 
                                 limit=LIMIT_PER_KEYWORD,
                                 skip=0,
-                                google_api_key=google_api_key
+                                google_api_key=google_api_key,
+                                search_terms=queries
                             )
                             
                             if isinstance(res_batch, dict) and "error" in res_batch:
@@ -1803,7 +1804,8 @@ if current_tab == " Search & Add":
                             radius=search_radius, 
                             limit=LIMIT_PER_KEYWORD,
                             skip=current_skip,
-                            google_api_key=google_api_key
+                            google_api_key=google_api_key,
+                            search_terms=queries
                         )
                         if isinstance(res_batch, list):
                             new_os_results.extend(res_batch)
