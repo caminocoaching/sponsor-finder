@@ -56,7 +56,7 @@ class AirtableManager:
             "Next Action": "next action",
             "Contact Name": "contact name",
             "Value": "Value",
-            "Notes JSON": "notes json",
+            "Notes JSON": "notes",
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
