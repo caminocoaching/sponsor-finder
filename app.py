@@ -2295,75 +2295,88 @@ if current_tab == "✉️ Outreach Assistant":
                 has_email = bool(lead_notes_data.get('email'))
                 has_linkedin = bool(lead_notes_data.get('contact_url', '').startswith('http'))
                 
-                # ===== STEP 1: INTEL (What Apollo Found) =====
-                st.markdown("### Step 1: Review Intel")
+                # ============================================================
+                # SECTION 1: CONTACTS FOUND
+                # ============================================================
+                st.markdown("### 👤 Contacts Found")
                 
                 if has_contact or has_email:
-                    # Apollo found data — show summary card
-                    intel_cols = st.columns([1, 1])
-                    with intel_cols[0]:
-                        st.markdown(f"**🏢 {lead['Business Name']}**")
-                        if lead.get('Sector'):
-                            st.caption(f"Sector: {lead['Sector']}")
-                        if lead_notes_data.get('industry'):
-                            st.caption(f"Industry: {lead_notes_data['industry']}")
-                        if lead.get('Website'):
-                            st.markdown(f"🌐 [{domain}]({lead['Website']})")
-                        
-                        emp = lead_notes_data.get('employee_count', '')
-                        rev = lead_notes_data.get('revenue', '')
-                        if emp or rev:
-                            size_info = []
-                            if emp: size_info.append(f"{emp} employees")
-                            if rev: size_info.append(f"Revenue: {rev}")
-                            st.caption(" • ".join(size_info))
-                    
-                    with intel_cols[1]:
-                        st.markdown(f"**👤 {clean_contact}**")
+                    # Primary contact card
+                    pc1, pc2, pc3 = st.columns([2, 2, 1])
+                    with pc1:
+                        st.markdown(f"**{clean_contact}**")
                         if contact_title:
-                            st.caption(f"Title: {contact_title}")
+                            st.caption(contact_title)
+                    with pc2:
                         if has_email:
                             st.markdown(f"📧 {lead_notes_data['email']}")
                         if has_linkedin:
                             st.markdown(f"🔗 [LinkedIn Profile]({lead_notes_data['contact_url']})")
-                        company_li = lead_notes_data.get('linkedin_company', '')
-                        if company_li:
-                            st.markdown(f"🏢 [Company LinkedIn]({company_li})")
-                        
-                        # Alternate contacts (Apollo)
-                        alts = lead_notes_data.get('alternates', [])
-                        if alts:
-                            alt_text = ", ".join([f"{a.get('name','')} ({a.get('title','')})" for a in alts[:2]])
-                            st.caption(f"Also found: {alt_text}")
+                    with pc3:
+                        st.success("Primary")
                     
-                    # Companies House data (directors/PSCs)
-                    ch_dirs = lead_notes_data.get('ch_directors', [])
-                    ch_pscs = lead_notes_data.get('ch_pscs', [])
-                    if ch_dirs or ch_pscs:
-                        with st.expander(f"🏛️ Companies House ({len(ch_dirs)} directors, {len(ch_pscs)} owners)", expanded=False):
-                            if ch_pscs:
-                                st.markdown("**Owners (PSC):**")
-                                for p in ch_pscs:
-                                    st.markdown(f"• {p['name']}")
-                            if ch_dirs:
-                                st.markdown("**Directors:**")
-                                for d in ch_dirs:
-                                    role = d.get('role', '').replace('-', ' ').title()
-                                    st.markdown(f"• {d['name']} — {role}")
-                            if lead_notes_data.get('ch_company_number'):
-                                ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{lead_notes_data['ch_company_number']}"
-                                st.markdown(f"[View on Companies House]({ch_url})")
-                    
-                    st.success("✅ Decision-maker found. Ready to connect!")
+                    # Alternate contacts from Apollo
+                    alts = lead_notes_data.get('alternate_contacts', lead_notes_data.get('alternates', []))
+                    if alts:
+                        for alt in alts[:3]:
+                            a_name = alt.get('name', '')
+                            a_title = alt.get('title', '')
+                            if a_name:
+                                ac1, ac2, ac3 = st.columns([2, 2, 1])
+                                with ac1:
+                                    st.markdown(f"{a_name}")
+                                    if a_title:
+                                        st.caption(a_title)
+                                with ac2:
+                                    if alt.get('linkedin'):
+                                        st.markdown(f"🔗 [LinkedIn]({alt['linkedin']})")
+                                    if alt.get('email'):
+                                        st.markdown(f"📧 {alt['email']}")
+                                with ac3:
+                                    st.caption("Alt")
                 else:
-                    st.warning("⚠️ Apollo couldn't find a contact for this company. Use the research tools below to find one manually.")
+                    st.warning("⚠️ No contact found automatically. Use the search links below or enter manually.")
                 
-                st.divider()
+                # Companies House directors
+                ch_dirs = lead_notes_data.get('ch_directors', [])
+                ch_pscs = lead_notes_data.get('ch_pscs', [])
+                if ch_dirs or ch_pscs:
+                    with st.expander(f"🏛️ Companies House — {len(ch_pscs)} owners, {len(ch_dirs)} directors", expanded=not has_contact):
+                        if ch_pscs:
+                            for p in ch_pscs:
+                                st.markdown(f"👑 **{p['name']}** — Owner (PSC)")
+                        if ch_dirs:
+                            for d in ch_dirs:
+                                role = d.get('role', '').replace('-', ' ').title()
+                                st.markdown(f"📋 {d['name']} — {role}")
+                        if lead_notes_data.get('ch_company_number'):
+                            ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{lead_notes_data['ch_company_number']}"
+                            st.markdown(f"[View full record on Companies House →]({ch_url})")
                 
-                # ===== STEP 2: THE MESSAGE =====
-                st.markdown("### Step 2: Copy & Send Message")
+                # Manual search links for finding contacts
+                with st.expander("🔍 Search for contacts manually", expanded=not has_contact):
+                    ms1, ms2 = st.columns(2)
+                    with ms1:
+                        li_people = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"👔 [LinkedIn People Search]({li_people})")
+                        li_company = f"https://www.linkedin.com/search/results/companies/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"🏢 [LinkedIn Company Search]({li_company})")
+                        if clean_contact and has_contact:
+                            li_person = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(clean_contact)}"
+                            st.markdown(f"🔎 [Find {clean_contact} on LinkedIn]({li_person})")
+                    with ms2:
+                        fb_people = f"https://www.facebook.com/search/people/?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"👤 [Facebook People Search]({fb_people})")
+                        ch_num = lead_notes_data.get('ch_company_number', '')
+                        if ch_num:
+                            ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}"
+                            st.markdown(f"🏛️ [Companies House Filing]({ch_url})")
+                        else:
+                            ch_search = f"https://find-and-update.company-information.service.gov.uk/search?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                            st.markdown(f"🏛️ [Search Companies House]({ch_search})")
                 
-                # Contact details (editable)
+                # Editable contact fields
+                st.caption("Edit contact details:")
                 edit_c1, edit_c2, edit_c3 = st.columns([2, 1, 2])
                 with edit_c1:
                     new_name = st.text_input("Contact Name", value=contact_name_raw, key=f"contact_name_input_{lead['id']}")
@@ -2376,7 +2389,6 @@ if current_tab == "✉️ Outreach Assistant":
                     saved_url = lead_notes_data.get('contact_url', '')
                     contact_url = st.text_input("LinkedIn URL", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
                 
-                # Save contact changes
                 if new_name != contact_name_raw or contact_url != saved_url:
                     if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
                         if new_name:
@@ -2389,13 +2401,60 @@ if current_tab == "✉️ Outreach Assistant":
                             time.sleep(0.5)
                             st.rerun()
                 
-                # Open Profile button
-                if has_linkedin:
-                    st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({lead_notes_data['contact_url']})**")
+                st.divider()
+                
+                # ============================================================
+                # SECTION 2: COMPANY RESEARCH
+                # ============================================================
+                st.markdown("### 🔬 Company Research")
+                
+                # Company summary
+                info_parts = []
+                if lead.get('Sector'): info_parts.append(f"**Sector:** {lead['Sector']}")
+                if lead_notes_data.get('industry'): info_parts.append(f"**Industry:** {lead_notes_data['industry']}")
+                emp = lead_notes_data.get('employee_count', '')
+                rev = lead_notes_data.get('revenue', '')
+                if emp: info_parts.append(f"**Size:** {emp} employees")
+                if rev: info_parts.append(f"**Revenue:** {rev}")
+                if lead.get('Website'): info_parts.append(f"**Web:** [{domain}]({lead['Website']})")
+                if lead_notes_data.get('description'):
+                    info_parts.append(f"**About:** {lead_notes_data['description'][:150]}")
+                
+                if info_parts:
+                    st.markdown(" · ".join(info_parts))
+                
+                # Research links
+                def google_link(query, label):
+                    url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                    st.markdown(f"• [{label}]({url})")
+                
+                res_c1, res_c2 = st.columns(2)
+                with res_c1:
+                    google_link(f'{lead["Business Name"]} sponsorship', "🏆 Sponsorship History")
+                    google_link(f'"{lead["Business Name"]}" news expansion opening', "📰 News & Growth")
+                    if domain:
+                        google_link(f'"{lead["Business Name"]}" after:2025-01-01', "🕐 Latest News (12mo)")
+                with res_c2:
+                    google_link(f'{lead["Business Name"]}', "🔍 Google Search")
+                    if domain:
+                        google_link(f'"{lead["Business Name"]}" -site:{domain}', "📢 External Press")
+                    company_li = lead_notes_data.get('linkedin_company', '')
+                    if company_li:
+                        st.markdown(f"• [🏢 Company LinkedIn]({company_li})")
+                    else:
+                        li_co = f"https://www.linkedin.com/search/results/companies/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"• [🏢 Find on LinkedIn]({li_co})")
                 
                 st.divider()
                 
-                # Message template
+                # ============================================================
+                # SECTION 3: OUTREACH MESSAGE
+                # ============================================================
+                st.markdown("### ✉️ Outreach Message")
+                
+                if has_linkedin:
+                    st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({lead_notes_data['contact_url']})**")
+                
                 contact_name_for_msg = new_name if new_name else ""
                 town = saved_town
                 
@@ -2409,7 +2468,6 @@ if current_tab == "✉️ Outreach Assistant":
                     "LI Msg 5: Final (Day 28)"
                 ]
                 
-                # Auto-select next step
                 last_sent_step = lead_notes_data.get('outreach_step', -1)
                 try: last_sent_step = int(last_sent_step)
                 except: last_sent_step = -1
@@ -2436,9 +2494,7 @@ if current_tab == "✉️ Outreach Assistant":
                     st.caption("👇 Click the Copy icon in the top right of the box below")
                     st.code(final_msg, language=None)
                     
-                    # ===== STEP 3: SEND & SCHEDULE =====
-                    st.markdown("### Step 3: Mark as Sent")
-                    
+                    # Send & Schedule
                     col_d1, col_d2 = st.columns([2, 1])
                     with col_d1:
                         def_days = 2
@@ -2485,20 +2541,15 @@ if current_tab == "✉️ Outreach Assistant":
                     st.subheader("Coach Mode")
                     reply = st.text_input("Paste Reply:")
                     
-                    # Default keys
                     detected_key = "fallback"
                     
                     if reply:
                         detected_key = handle_objection(reply)
                         st.caption(f"Detected Intent: {detected_key.title()}")
                         
-                    # Manual Override
                     options = list(OBJECTION_SCRIPTS.keys()) + ["fallback"]
-                    
-                    # Handle fallback text logic
                     fallback_text = "I see. Could you clarify if the hesitation is around timing or the concept itself? (Generic fallback)"
                     
-                    # Try to find index of detected key
                     try:
                         idx = options.index(detected_key)
                     except:
@@ -2506,7 +2557,6 @@ if current_tab == "✉️ Outreach Assistant":
                         
                     selected_type = st.selectbox("Response Strategy", options, index=idx)
                     
-                    # Get content
                     if selected_type == "fallback":
                         final_script = fallback_text
                     else:
@@ -2530,48 +2580,7 @@ if current_tab == "✉️ Outreach Assistant":
                         st.success(f"Rescheduled for {m_date_str}!")
                         time.sleep(1)
                         st.rerun()
-                
-                # --- COLLAPSED MANUAL RESEARCH (fallback if Apollo didn't find contact) ---
-                st.divider()
-                expand_research = not has_contact  # Auto-expand if no contact found
-                with st.expander("🔍 Manual Research Tools (if needed)", expanded=expand_research):
-                    st.caption("Use these if Apollo didn't find the decision-maker, or you want to verify.")
-                    
-                    def google_link(query, label):
-                        url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
-                        st.markdown(f"• [{label}]({url})")
-                    
-                    r_c1, r_c2 = st.columns(2)
-                    with r_c1:
-                        st.markdown("**🏛️ Companies House**")
-                        ch_num = lead_notes_data.get('ch_company_number', '')
-                        if ch_num:
-                            ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}"
-                            st.markdown(f"• [View Company Filing]({ch_url})")
-                        else:
-                            ch_search = f"https://find-and-update.company-information.service.gov.uk/search?q={urllib.parse.quote_plus(lead['Business Name'])}"
-                            st.markdown(f"• [Search Companies House]({ch_search})")
-                        
-                        st.markdown("**👔 LinkedIn**")
-                        li_company = f"https://www.linkedin.com/search/results/companies/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"• [Search Companies]({li_company})")
-                        li_people = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"• [Search People]({li_people})")
-                        if clean_contact and has_contact:
-                            li_person = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(clean_contact)}"
-                            st.markdown(f"• [Find {clean_contact}]({li_person})")
-                    
-                    with r_c2:
-                        st.markdown("**🌍 Web Search**")
-                        google_link(f'{lead["Business Name"]}', "Google Search")
-                        google_link(f'{lead["Business Name"]} sponsorship', "Sponsorship Check")
-                        google_link(f'"{lead["Business Name"]}" after:2025-01-01', "Latest News")
-                        
-                        st.markdown("**👤 Facebook**")
-                        fb_company = f"https://www.facebook.com/search/pages/?q={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"• [Company Page]({fb_company})")
-                        fb_people = f"https://www.facebook.com/search/people/?q={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"• [Find Owner]({fb_people})")
+
 
             # --- STAGE 2: DISCOVERY CALL ---
             elif stage == "2. Discovery Call":
