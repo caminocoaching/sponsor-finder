@@ -1071,7 +1071,8 @@ with st.sidebar:
         scout_location = st.text_input("City / Location", value=saved_town)
         search_query = f"{scout_company} in {scout_location}" if scout_company else ""
 
-    search_radius = st.slider("Radius (Miles)", 10, 500, 50)
+    default_radius = st.session_state.pop('widen_radius', 50)
+    search_radius = st.slider("Radius (Miles)", 10, 500, default_radius)
     
     location_search_ctx = ", ".join([p for p in [saved_town, saved_state, saved_country, saved_zip] if p])
     if not location_search_ctx:
@@ -1659,7 +1660,17 @@ if current_tab == " Search & Add":
                         progress_log.empty()
                         
                         if not all_os_results:
-                                st.warning("Outscraper found 0 results.")
+                                st.warning(f"🔍 No '{selected_sector}' businesses found within {search_radius} miles of {location_search_ctx}.")
+                                st.info("💡 Try widening your search radius or changing the sector.")
+                                widen_col1, widen_col2 = st.columns([1, 1])
+                                with widen_col1:
+                                    if st.button(f"🔄 Widen to {search_radius + 50} miles", type="primary"):
+                                        st.session_state.widen_radius = search_radius + 50
+                                        st.rerun()
+                                with widen_col2:
+                                    if st.button(f"🔄 Widen to {search_radius + 100} miles"):
+                                        st.session_state.widen_radius = search_radius + 100
+                                        st.rerun()
                                 st.session_state.leads = pd.DataFrame()
                                 st.session_state.next_page_token = None
                         else:
@@ -1678,7 +1689,7 @@ if current_tab == " Search & Add":
                                 
                                 # Enable Load More for Outscraper
                                 st.session_state.next_page_token = "outscraper_more" 
-                                st.success(f"Outscraper: Showing closest {len(st.session_state.leads)} targets (Merged keywords)")
+                                st.success(f"✅ Found {len(st.session_state.leads)} '{selected_sector}' businesses within {search_radius} miles")
                 
                 # --- GOOGLE PLACES (LEGACY / PROXIMITY) ---
                 elif "Legacy" in provider and google_api_key:
