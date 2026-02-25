@@ -2101,14 +2101,11 @@ if current_tab == " Search & Add":
                         
                     if new_lead_id:
                         quality_msg = f" (Quality: {'⭐' * int(row.get('Quality', 0))})" if row.get("Quality") else ""
-                        st.toast(f"Added {add_choice}{quality_msg}")
+                        st.toast(f"✅ Added {add_choice}{quality_msg} — Opening Outreach Assistant...")
                         
-                        # [NEW] Auto-Switch for SCOUT MODE
-                        if search_mode == "Company Scout":
-                            st.session_state.selected_lead_id = new_lead_id
-                            st.session_state.requested_tab = "✉️ Outreach Assistant"
-                            st.rerun()
-                            
+                        # Auto-switch to Outreach Assistant
+                        st.session_state.selected_lead_id = new_lead_id
+                        st.session_state.requested_tab = "✉️ Outreach Assistant"
                         time.sleep(1)
                         st.rerun()
                     else:
