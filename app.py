@@ -21,100 +21,165 @@ st.set_page_config(page_title="Sponsor Finder V2.5", page_icon="🏍️", layout
 db.init_db()
 
 # --- DATA & CONSTANTS ---
+# Sectors based on actual MotoGP, BSB & MotoAmerica sponsorship profiles (2026)
 SECTORS = [
     "in your industry sector",
-    # --- ENDEMIC (closest to motorsport) ---
+    # === ENDEMIC / AUTOMOTIVE ===
     "Motorcycle dealers",
     "Motorcycle parts & accessories",
-    "Automotive aftermarket",
-    "Accident management & vehicle services",
-    # --- ENGINEERING & INDUSTRIAL ---
-    "Engineering & manufacturing",
-    "Transport & haulage",
-    "Logistics",
-    "Building supplies & construction",
-    # --- HIGH-VALUE NON-ENDEMIC (PDF sectors) ---
-    "Enterprise AI & SaaS",
-    "Online gaming & casinos",
-    "Green tech & renewable energy",
-    "Fintech & digital banking",
-    "Luxury goods & lifestyle",
-    # --- SERVICE / LOCAL ---
-    "Food & beverage brands",
-    "Craft brewery & distillery",
-    "Insurance companies",
-    "Financial services & wealth management",
-    "Property & real estate",
-    "Legal services",
+    "Automotive aftermarket & performance",
+    "Vehicle wrapping & graphics",
+    "Paint protection & detailing",
+    "Exhaust & performance systems",
+    "Crash protection & accessories",
+    "Accident management & body repair",
+    # === ENERGY, OILS & LUBRICANTS ===
+    "Oil, lubricants & chemicals",
+    "Fuel & energy companies",
+    # === ENGINEERING & MANUFACTURING ===
+    "Precision engineering & CNC",
+    "Tool manufacturers & suppliers",
+    "Fabrication & metalwork",
+    "Fastening & assembly materials",
+    # === CONSTRUCTION & INFRASTRUCTURE ===
+    "Steel & metals distribution",
+    "Electrical installation & engineering",
+    "Road surfacing & civil engineering",
+    "Building materials & merchants",
+    "Construction companies",
+    # === TRANSPORT & LOGISTICS ===
+    "HGV haulage & road freight",
+    "Logistics & warehousing",
+    "Precision trucking & fleet",
+    # === IT, SOFTWARE & TECH ===
+    "Software & SaaS companies",
+    "IT services & consulting",
+    "Data analytics & AI",
+    # === FINANCIAL & PROFESSIONAL ===
+    "Insurance brokers & underwriters",
+    "Fintech & digital payments",
+    "Wealth management & investment",
+    "Legal services & law firms",
+    "Commercial property & development",
     "Recruitment & staffing",
-    "Fitness & wellness",
-    "Printers & signage",
-    # --- DISCOVERY ---
+    # === BEVERAGES & FMCG ===
+    "Energy drinks & sports nutrition",
+    "Craft brewery & distillery",
+    "Food & beverage manufacturers",
+    # === LIFESTYLE & ENTERTAINMENT ===
+    "Online gaming & competitions",
+    "Luxury goods & lifestyle",
+    "Fitness & wellness brands",
+    "Printers, signage & branding",
+    "Automotive lighting & optics",
+    "Telecommunications",
+    # === DISCOVERY ===
     "Companies already sponsoring motorsport",
     "Fast-growing local businesses",
     "Other (type your own)"
 ]
 
 SECTOR_HOOKS = {
-    "Construction": "building a legacy and solid foundations",
+    "Motorcycle": "passion for two wheels and the thrill of the track",
+    "Automotive": "performance engineering and the thrill of speed",
+    "Vehicle wrapping": "high-visibility branding that gets noticed",
+    "Paint protection": "protecting premium surfaces under extreme conditions",
+    "Exhaust": "the sound and fury of high performance",
+    "Crash protection": "safety, resilience and getting back on track",
+    "Accident": "recovery, precision repair and getting back on the road",
+    "Oil": "keeping machines running at peak performance",
+    "Fuel": "powering performance at the highest level",
+    "Lubricant": "keeping machines running at peak performance",
+    "Precision engineering": "precision, performance and technical excellence",
+    "Tool": "equipping professionals with the best equipment",
+    "Fabrication": "craftsmanship, precision and structural strength",
+    "Fastening": "the reliable connections that hold everything together",
+    "Steel": "strength, durability and industrial excellence",
+    "Electrical": "powering innovation and technical infrastructure",
+    "Road surfacing": "building the surfaces where performance happens",
     "Building": "building a legacy and solid foundations",
-    "Engineering": "precision, performance, and technical excellence",
-    "Transport": "logistics, speed, and moving forward",
-    "Motorcycle": "passion for the sport and the machine",
-    "Automotive": "performance, engineering and the thrill of the track",
-    "Accident": "safety, recovery, and getting back on track",
-    "Food": "fueling performance and great taste",
-    "Craft": "craftsmanship, quality and local pride",
-    "Financial": "calculated risk and high rewards",
-    "Fintech": "innovation, trust and global ambition",
+    "Construction": "building a legacy and solid foundations",
+    "HGV": "logistics, reliability and moving mountains",
     "Logistics": "delivering results on time, every time",
-    "Insurance": "protection and peace of mind at high speed",
-    "Tech": "innovation and data-driven performance",
-    "Enterprise": "pushing the boundaries of what technology can do",
-    "Gaming": "adrenaline, competition and the thrill of the win",
-    "Green": "sustainable innovation and a cleaner future",
-    "Luxury": "exclusivity, prestige and premium experiences",
-    "Property": "building value and long-term investment",
+    "Trucking": "precision logistics and keeping the wheels turning",
+    "Software": "innovation, data and digital transformation",
+    "IT services": "technology that drives competitive advantage",
+    "Data analytics": "data-driven decisions and competitive intelligence",
+    "Insurance": "protection, trust and calculated risk management",
+    "Fintech": "innovation, trust and global ambition",
+    "Wealth": "calculated risk, high returns and long-term value",
     "Legal": "precision, strategy and winning results",
+    "Property": "building value and long-term investment",
+    "Commercial property": "building value and long-term investment",
     "Recruitment": "finding the best talent and backing winners",
+    "Energy drink": "fueling peak performance and adrenaline",
+    "Craft brewery": "craftsmanship, quality and local pride",
+    "Food": "fueling performance and great taste",
+    "Online gaming": "adrenaline, competition and the thrill of the win",
+    "Luxury": "exclusivity, prestige and premium experiences",
     "Fitness": "peak performance, discipline and pushing limits",
     "Printers": "visibility, branding and making an impact",
+    "Lighting": "illuminating performance and visibility",
+    "Telecom": "connectivity, reach and staying ahead",
     "Fast-growing": "ambition, momentum and standing out from the crowd",
     "Companies already": "proven belief in motorsport as a marketing platform",
     "Other": "excellence and high performance"
 }
 
-# [NEW] Optimized Search Queries for Google Places API
-# Maps the user-friendly dropdown name to a LIST of terms to search in parallel
+# Optimized Search Queries — tight, specific terms per sector
+# Based on actual sponsor types found in MotoGP, BSB, MotoAmerica paddocks
 SECTOR_SEARCH_OPTIMIZATIONS = {
-    # --- ENDEMIC ---
-    "Motorcycle dealers": ["Motorcycle Dealer", "Bike shop", "Motorcycle repair"],
-    "Motorcycle parts & accessories": ["Motorcycle parts store", "Motorcycle accessories"],
-    "Automotive aftermarket": ["Car parts supplier", "Auto accessories", "Performance parts", "Vehicle wrapping"],
-    "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
-    # --- INDUSTRIAL ---
-    "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
-    "Transport & haulage": ["HGV haulage", "Road haulage contractor", "Truck freight transport"],
-    "Logistics": ["Logistics warehouse", "Freight forwarding company", "Supply chain logistics"],
-    "Building supplies & construction": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction company"],
-    # --- HIGH-VALUE NON-ENDEMIC ---
-    "Enterprise AI & SaaS": ["Software company", "IT services company", "Technology consulting", "SaaS company"],
-    "Online gaming & casinos": ["Online casino", "Gaming company", "Betting company", "Esports"],
-    "Green tech & renewable energy": ["Solar panel installer", "Renewable energy company", "Electric vehicle charging", "Environmental services"],
-    "Fintech & digital banking": ["Fintech", "Payment processing", "Digital bank", "Cryptocurrency exchange"],
-    "Luxury goods & lifestyle": ["Luxury watch retailer", "Premium car dealer", "Private members club", "Luxury brand"],
-    # --- SERVICE / LOCAL ---
-    "Food & beverage brands": ["Food manufacturer", "Drink manufacturer", "Wholesale food", "Energy drink"],
-    "Craft brewery & distillery": ["Craft brewery", "Microbrewery", "Distillery", "Gin distillery"],
-    "Insurance companies": ["Commercial Insurance", "Insurance Broker", "Business Insurance"],
-    "Financial services & wealth management": ["Wealth management", "Corporate finance", "Investment service", "Financial advisor"],
-    "Property & real estate": ["Estate agent", "Property developer", "Commercial property", "Property investment"],
-    "Legal services": ["Law firm", "Solicitor", "Corporate lawyer", "Commercial law firm"],
-    "Recruitment & staffing": ["Recruitment agency", "Staffing agency", "Executive recruitment", "HR consulting"],
-    "Fitness & wellness": ["Gym", "Personal trainer", "Sports nutrition", "Fitness brand"],
-    "Printers & signage": ["Commercial Printer", "Print shop", "Sign maker", "Vehicle graphics"],
-    # --- DISCOVERY MODES ---
-    "Companies already sponsoring motorsport": ["Motorsport sponsor", "Racing team sponsor", "Motorcycle racing sponsor"],
+    # === ENDEMIC / AUTOMOTIVE ===
+    "Motorcycle dealers": ["Motorcycle dealer", "Motorbike showroom", "Motorcycle sales"],
+    "Motorcycle parts & accessories": ["Motorcycle parts shop", "Motorcycle accessories store", "Bike spares"],
+    "Automotive aftermarket & performance": ["Car performance parts", "Automotive tuning specialist", "Vehicle modification"],
+    "Vehicle wrapping & graphics": ["Vehicle wrap specialist", "Car wrapping company", "Vehicle graphics"],
+    "Paint protection & detailing": ["Paint protection film installer", "Ceramic coating specialist", "Car detailing"],
+    "Exhaust & performance systems": ["Performance exhaust manufacturer", "Exhaust system supplier", "Sports exhaust"],
+    "Crash protection & accessories": ["Motorcycle protection accessories", "Crash bungs manufacturer", "Motorcycle guard"],
+    "Accident management & body repair": ["Car body shop", "Accident repair centre", "Vehicle damage repair"],
+    # === ENERGY, OILS & LUBRICANTS ===
+    "Oil, lubricants & chemicals": ["Industrial lubricant supplier", "Motor oil distributor", "Performance lubricant"],
+    "Fuel & energy companies": ["Fuel supplier", "Petroleum distributor", "Energy company"],
+    # === ENGINEERING & MANUFACTURING ===
+    "Precision engineering & CNC": ["Precision engineering company", "CNC machining company", "Engineering manufacturer"],
+    "Tool manufacturers & suppliers": ["Professional tool supplier", "Industrial tool manufacturer", "Trade tools"],
+    "Fabrication & metalwork": ["Metal fabrication company", "Welding and fabrication", "Sheet metal worker"],
+    "Fastening & assembly materials": ["Fastener supplier", "Industrial fixings supplier", "Assembly materials"],
+    # === CONSTRUCTION & INFRASTRUCTURE ===
+    "Steel & metals distribution": ["Steel stockholder", "Steel distributor", "Metal supplier"],
+    "Electrical installation & engineering": ["Electrical contractor", "Electrical installation company", "Industrial electrician"],
+    "Road surfacing & civil engineering": ["Road surfacing contractor", "Civil engineering contractor", "Tarmac paving"],
+    "Building materials & merchants": ["Builders merchant", "Building materials supplier", "Timber merchant"],
+    "Construction companies": ["Construction company", "Building contractor", "Civil engineering firm"],
+    # === TRANSPORT & LOGISTICS ===
+    "HGV haulage & road freight": ["HGV haulage contractor", "Road freight haulier", "Trucking company"],
+    "Logistics & warehousing": ["Logistics warehouse company", "Distribution centre", "Third party logistics"],
+    "Precision trucking & fleet": ["Fleet management company", "Commercial vehicle operator", "Transport fleet"],
+    # === IT, SOFTWARE & TECH ===
+    "Software & SaaS companies": ["Software development company", "SaaS company", "Tech startup"],
+    "IT services & consulting": ["IT services company", "IT consulting firm", "Managed IT services"],
+    "Data analytics & AI": ["Data analytics company", "Artificial intelligence company", "Machine learning"],
+    # === FINANCIAL & PROFESSIONAL ===
+    "Insurance brokers & underwriters": ["Commercial insurance broker", "Business insurance broker", "Insurance underwriter"],
+    "Fintech & digital payments": ["Fintech company", "Payment processing company", "Digital banking"],
+    "Wealth management & investment": ["Wealth management firm", "Investment company", "Financial planning"],
+    "Legal services & law firms": ["Commercial law firm", "Corporate solicitor", "Business law firm"],
+    "Commercial property & development": ["Property developer", "Commercial property company", "Real estate developer"],
+    "Recruitment & staffing": ["Recruitment agency", "Industrial staffing agency", "Executive recruiter"],
+    # === BEVERAGES & FMCG ===
+    "Energy drinks & sports nutrition": ["Energy drink brand", "Sports nutrition company", "Supplement manufacturer"],
+    "Craft brewery & distillery": ["Craft brewery", "Independent brewery", "Gin distillery"],
+    "Food & beverage manufacturers": ["Food manufacturer", "Drink manufacturer", "FMCG producer"],
+    # === LIFESTYLE & ENTERTAINMENT ===
+    "Online gaming & competitions": ["Online gaming company", "Prize competition company", "Esports company"],
+    "Luxury goods & lifestyle": ["Luxury watch retailer", "Premium brand boutique", "Luxury lifestyle"],
+    "Fitness & wellness brands": ["Fitness supplement company", "Sports brand", "Performance gym"],
+    "Printers, signage & branding": ["Commercial printer", "Sign manufacturer", "Vehicle livery"],
+    "Automotive lighting & optics": ["Automotive lighting manufacturer", "LED lighting supplier", "Vehicle lighting"],
+    "Telecommunications": ["Telecommunications company", "Broadband provider", "Mobile network"],
+    # === DISCOVERY ===
+    "Companies already sponsoring motorsport": ["Motorsport sponsor", "Racing team sponsor", "Motorcycle racing"],
     "Fast-growing local businesses": ["Award winning business", "Business of the year", "Fast growing company"],
 }
 
