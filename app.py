@@ -1930,7 +1930,7 @@ if current_tab == " Search & Add":
                     enriched_notes = {}
                     
                     # --- PRIMARY ENRICHMENT: APOLLO (decision-maker + company data) ---
-                    apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
+                    apollo_key = st.session_state.user_profile.get("apollo_api_key", "") or st.secrets.get("apollo_api_key", "")
                     apollo_found = False
                     
                     if apollo_key and b_web:
@@ -1993,6 +1993,9 @@ if current_tab == " Search & Add":
                             
                             if apollo_res.get('Company Phone'):
                                 enriched_notes["company_phone"] = apollo_res['Company Phone']
+                            
+                            if apollo_res.get('Direct Phone'):
+                                enriched_notes["direct_phone"] = apollo_res['Direct Phone']
                             
                             if apollo_res.get('Short Description'):
                                 enriched_notes["description"] = apollo_res['Short Description']
@@ -2667,10 +2670,13 @@ Supply a source URL for every data point. Do not guess emails."""
                                 st.markdown(f"**Other emails:** {', '.join(extra)}")
 
                         # Phone
+                        direct_phone = existing_notes.get('direct_phone', '')
                         company_phone = existing_notes.get('company_phone', '')
                         phones = existing_notes.get('phones', [])
+                        if direct_phone:
+                            st.markdown(f"**📱 Direct:** {direct_phone}")
                         if company_phone:
-                            st.markdown(f"**📞 Phone:** {company_phone}")
+                            st.markdown(f"**📞 Office:** {company_phone}")
                         elif isinstance(phones, list) and phones:
                             st.markdown(f"**📞 Phone:** {phones[0]}")
                         if isinstance(phones, list) and len(phones) > 1:

@@ -64,79 +64,167 @@ def search_outscraper_contacts(outscraper_key, domain):
 
 def search_apollo_people(api_key, domain):
     """
-    Search Apollo for C-Suite, Founder, or Director level people for a specific domain.
-    Returns decision-maker info + company firmographics in one call.
+    Two-step Apollo enrichment:
+    Step 1: Search (FREE, no credits) — find decision-maker by domain
+    Step 2: Enrich (1 credit) — get their email, phone, LinkedIn
+    Returns decision-maker info + company firmographics.
     """
-    url = "https://api.apollo.io/v1/mixed_people/search"
     headers = {
         "Content-Type": "application/json",
-        "Cache-Control": "no-cache"
+        "Cache-Control": "no-cache",
+        "X-Api-Key": api_key
     }
     
-    # We want to find top decision makers: Owner, Founder, CEO, Managing Director
-    payload = {
-        "api_key": api_key,
-        "q_organization_domains": domain,
+    # --- STEP 1: SEARCH (free, no credits consumed) ---
+    search_url = "https://api.apollo.io/api/v1/mixed_people/api_search"
+    search_payload = {
+        "q_organization_domains_list": [domain],
         "person_titles": ["Managing Director", "Founder", "Owner", "Chief Executive Officer", 
                           "CEO", "President", "Director", "General Manager", "Principal"],
+        "person_seniorities": ["owner", "founder", "c_suite", "partner", "vp", "director"],
         "page": 1,
         "per_page": 5
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(search_url, headers=headers, json=search_payload)
         
-        if response.status_code == 200:
-            data = response.json()
-            people = data.get("people", [])
-            
-            if not people:
-                return {"error": "No matching decision makers found."}
-                
-            # Grab the best match
-            person = people[0]
-            
-            # Extract company/org data from the person's organization
-            org = person.get("organization", {}) or {}
-            
-            result = {
-                # Decision-maker data
-                "First Name": person.get("first_name", ""),
-                "Last Name": person.get("last_name", ""),
-                "Title": person.get("title", ""),
-                "LinkedIn": person.get("linkedin_url", ""),
-                "Email": person.get("email", ""),
-                "Headline": person.get("headline", ""),
-                # Company firmographic data (from organization embedded in person)
-                "Company Name": org.get("name", ""),
-                "Company LinkedIn": org.get("linkedin_url", ""),
-                "Company Website": org.get("website_url", ""),
-                "Employee Count": org.get("estimated_num_employees") or org.get("num_employees") or "",
-                "Revenue": org.get("annual_revenue_printed", ""),
-                "Revenue Raw": org.get("annual_revenue") or "",
-                "Industry": org.get("industry", ""),
-                "Company Phone": org.get("phone", ""),
-                "Founded Year": org.get("founded_year", ""),
-                "City": org.get("city", ""),
-                "Country": org.get("country", ""),
-                "Short Description": org.get("short_description", ""),
+        if response.status_code != 200:
+            return {"error": f"Search API Error ({response.status_code}): {response.text[:200]}"}
+        
+        data = response.json()
+        people = data.get("people", [])
+        
+        # Fallback: if seniority filter returned 0, search without it
+        # Small UK companies often don't have formal seniority tags
+        if not people:
+            fallback_payload = {
+                "q_organization_domains_list": [domain],
+                "page": 1,
+                "per_page": 5
+            }
+            fallback_resp = requests.post(search_url, headers=headers, json=fallback_payload)
+            if fallback_resp.status_code == 200:
+                people = fallback_resp.json().get("people", [])
+        
+        if not people:
+            return {"error": "No matching decision makers found."}
+        
+        # Grab the best match from search
+        person = people[0]
+        person_id = person.get("id", "")
+        first_name = person.get("first_name", "")
+        last_name = person.get("last_name", person.get("last_name_obfuscated", ""))
+        title = person.get("title", "")
+        
+        # Extract company/org data from search result
+        org = person.get("organization", {}) or {}
+        
+        result = {
+            # Decision-maker data (from search — no email yet)
+            "First Name": first_name,
+            "Last Name": last_name,
+            "Title": title,
+            "LinkedIn": "",  # Not returned by search
+            "Email": "",     # Not returned by search
+            "Headline": person.get("headline", ""),
+            # Company firmographic data
+            "Company Name": org.get("name", ""),
+            "Company LinkedIn": org.get("linkedin_url", ""),
+            "Company Website": org.get("website_url", ""),
+            "Employee Count": org.get("estimated_num_employees") or org.get("num_employees") or "",
+            "Revenue": org.get("annual_revenue_printed", ""),
+            "Revenue Raw": org.get("annual_revenue") or "",
+            "Industry": org.get("industry", ""),
+            "Company Phone": org.get("phone", ""),
+            "Founded Year": org.get("founded_year", ""),
+            "City": org.get("city", ""),
+            "Country": org.get("country", ""),
+            "Short Description": org.get("short_description", ""),
+        }
+        
+        # Alternate contacts from search results
+        if len(people) > 1:
+            alternates = []
+            for p in people[1:4]:
+                alt_name = p.get("first_name", "")
+                alt_last = p.get("last_name", p.get("last_name_obfuscated", ""))
+                alternates.append({
+                    "name": f"{alt_name} {alt_last}".strip(),
+                    "title": p.get("title", ""),
+                    "email": "",  # Will be enriched separately if needed
+                    "linkedin": "",
+                    "person_id": p.get("id", "")
+                })
+            result["Alternates"] = alternates
+        
+        # --- STEP 2: ENRICH (1 credit) — get email, phone, LinkedIn ---
+        if person_id or (first_name and last_name):
+            enrich_url = "https://api.apollo.io/v1/people/match"
+            enrich_payload = {
+                "api_key": api_key,
+                "reveal_personal_emails": True,
             }
             
-            # If we got multiple people, include them as alternates
-            if len(people) > 1:
-                alternates = []
-                for p in people[1:4]:  # Up to 3 alternates
-                    alternates.append({
-                        "name": f"{p.get('first_name', '')} {p.get('last_name', '')}".strip(),
-                        "title": p.get("title", ""),
-                        "email": p.get("email", ""),
-                        "linkedin": p.get("linkedin_url", "")
-                    })
-                result["Alternates"] = alternates
+            # Use person_id if available, otherwise use name + domain
+            if person_id:
+                enrich_payload["id"] = person_id
+            else:
+                enrich_payload["first_name"] = first_name
+                enrich_payload["last_name"] = last_name
+                enrich_payload["organization_domain"] = domain
             
-            return result
-        else:
-            return {"error": f"API Error: {response.text}"}
+            try:
+                enrich_response = requests.post(enrich_url, headers=headers, json=enrich_payload)
+                
+                if enrich_response.status_code == 200:
+                    enrich_data = enrich_response.json()
+                    enriched_person = enrich_data.get("person", {}) or {}
+                    
+                    # Update result with enriched data
+                    if enriched_person.get("email"):
+                        result["Email"] = enriched_person["email"]
+                    if enriched_person.get("linkedin_url"):
+                        result["LinkedIn"] = enriched_person["linkedin_url"]
+                    if enriched_person.get("first_name"):
+                        result["First Name"] = enriched_person["first_name"]
+                    if enriched_person.get("last_name"):
+                        result["Last Name"] = enriched_person["last_name"]
+                    if enriched_person.get("title"):
+                        result["Title"] = enriched_person["title"]
+                    if enriched_person.get("headline"):
+                        result["Headline"] = enriched_person["headline"]
+                    
+                    # Phone numbers
+                    phone_numbers = enriched_person.get("phone_numbers", [])
+                    if phone_numbers:
+                        result["Direct Phone"] = phone_numbers[0].get("sanitized_number", "")
+                    
+                    # Organization data (enriched version may have more detail)
+                    enrich_org = enriched_person.get("organization", {}) or {}
+                    if enrich_org:
+                        if enrich_org.get("name") and not result.get("Company Name"):
+                            result["Company Name"] = enrich_org["name"]
+                        if enrich_org.get("linkedin_url") and not result.get("Company LinkedIn"):
+                            result["Company LinkedIn"] = enrich_org["linkedin_url"]
+                        if enrich_org.get("estimated_num_employees") and not result.get("Employee Count"):
+                            result["Employee Count"] = enrich_org["estimated_num_employees"]
+                        if enrich_org.get("annual_revenue_printed") and not result.get("Revenue"):
+                            result["Revenue"] = enrich_org["annual_revenue_printed"]
+                        if enrich_org.get("industry") and not result.get("Industry"):
+                            result["Industry"] = enrich_org["industry"]
+                        if enrich_org.get("phone") and not result.get("Company Phone"):
+                            result["Company Phone"] = enrich_org["phone"]
+                        if enrich_org.get("founded_year") and not result.get("Founded Year"):
+                            result["Founded Year"] = enrich_org["founded_year"]
+                        if enrich_org.get("short_description") and not result.get("Short Description"):
+                            result["Short Description"] = enrich_org["short_description"]
+                else:
+                    print(f"Apollo Enrich Error ({enrich_response.status_code}): {enrich_response.text[:200]}")
+            except Exception as enrich_err:
+                print(f"Apollo enrichment step failed: {enrich_err}")
+        
+        return result
     except Exception as e:
         return {"error": str(e)}
 
