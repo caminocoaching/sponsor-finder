@@ -252,8 +252,8 @@ def calendar_contact_card(lead_id):
     
     # Determine current sequence step
     seq_options = [
-        "Email: Cold Opener",
         "LI Connect: Request",
+        "Email: Cold Opener",
         "LI Msg 1: Intro (Day 2)",
         "LI Msg 2: Homework (Day 7)",
         "LI Msg 3: Momentum (Day 14)",
@@ -1347,8 +1347,8 @@ if current_tab == "📊 Active Campaign":
             
             # Message sequence for calendar labels
             _MSG_SEQUENCE = [
-                "Email: Cold Opener",
                 "LI Connect: Request",
+                "Email: Cold Opener",
                 "LI Msg 1: Intro (Day 2)",
                 "LI Msg 2: Homework (Day 7)",
                 "LI Msg 3: Momentum (Day 14)",
@@ -2372,8 +2372,8 @@ Supply a source URL for every data point. Do not guess emails."""
                         town = saved_town 
                         
                         seq_options = [
-                            "Email: Cold Opener",
                             "LI Connect: Request",
+                            "Email: Cold Opener",
                             "LI Msg 1: Intro (Day 2)",
                             "LI Msg 2: Homework (Day 7)",
                             "LI Msg 3: Momentum (Day 14)",
@@ -3749,8 +3749,8 @@ Best regards,
                             
                             # Determine which template step they're on
                             seq_options_fu = [
-                                "Email: Cold Opener",
                                 "LI Connect: Request",
+                                "Email: Cold Opener",
                                 "LI Msg 1: Intro (Day 2)",
                                 "LI Msg 2: Homework (Day 7)",
                                 "LI Msg 3: Momentum (Day 14)",
