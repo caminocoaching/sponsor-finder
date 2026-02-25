@@ -56,7 +56,7 @@ class AirtableManager:
             "Next Action": "next action",
             "Contact Name": "contact name",
             "Value": "Value",
-            # "Notes JSON": "notes json"      # Missing in Airtable
+            "Notes JSON": "notes json",
         }
         # Reverse map for fetching
         self.REVERSE_MAP = {v: k for k, v in self.FIELD_MAP.items()}
@@ -485,8 +485,9 @@ class AirtableManager:
         
         notes_str = json.dumps(notes_data)
         
+        col_name = self.FIELD_MAP.get("Notes JSON", "notes json")
         fields = {
-            self.FIELD_MAP["Notes JSON"]: notes_str
+            col_name: notes_str
         }
         
         payload = {"records": [{"id": lead_id, "fields": fields}]}
