@@ -323,15 +323,11 @@ def calendar_contact_card(lead_id):
     # --- ROW 2: Pipeline Progress ---
     status = lead.get('Status', 'Pipeline')
     
-    # Define the full pipeline stages
     pipeline_stages = ["Connect", "Discovery Call", "Proposal", "Secured"]
     
-    # Map status to pipeline position
     if status in ('Pipeline', 'Active'):
-        current_pipeline = 0  # Connect
-    elif status == 'Call Booked':
-        current_pipeline = 1  # Discovery Call
-    elif status in ('Discovery Call',):
+        current_pipeline = 0
+    elif status in ('Call Booked', 'Discovery Call'):
         current_pipeline = 1
     elif status == 'Proposal':
         current_pipeline = 2
@@ -344,15 +340,15 @@ def calendar_contact_card(lead_id):
     progress_parts = []
     for i, stage_name in enumerate(pipeline_stages):
         if i < current_pipeline:
-            progress_parts.append(f"✅ ~~{stage_name}~~")  # Completed
+            progress_parts.append(f"✅ ~~{stage_name}~~")
         elif i == current_pipeline:
-            progress_parts.append(f"**▶ {stage_name}**")   # Current
+            progress_parts.append(f"**▶ {stage_name}**")
         else:
-            progress_parts.append(f"⬜ {stage_name}")      # Future
+            progress_parts.append(f"⬜ {stage_name}")
     
     st.markdown(" → ".join(progress_parts))
     
-    # Connect sub-steps (message sequence)
+    # Connect sub-steps (message sequence) — inline with progress
     if current_pipeline == 0:
         step_parts = []
         for i, step in enumerate(seq_options):
@@ -365,28 +361,7 @@ def calendar_contact_card(lead_id):
                 step_parts.append(f"⬜ {short}")
         st.caption(" · ".join(step_parts))
     
-    # --- ROW 3: Next Action ---
-    next_action = lead.get('Next Action', '')
-    na1, na2 = st.columns([1, 1])
-    with na1:
-        if next_action:
-            st.metric("📅 Next Contact", str(next_action))
-        else:
-            st.metric("📅 Next Contact", "Not scheduled")
-    with na2:
-        if current_pipeline == 0 and not is_sequence_done:
-            st.metric("📨 Next Step", seq_options[current_step_idx].split(":")[0])
-        elif is_sequence_done:
-            st.metric("📨 Next Step", "Book Discovery Call")
-        elif current_pipeline == 1:
-            st.metric("📨 Next Step", "Run Discovery Call")
-        elif current_pipeline == 2:
-            st.metric("📨 Next Step", "Send Proposal")
-        else:
-            st.metric("📨 Next Step", "✅ Secured!")
-    
-    # --- ROW 4: Stage Advancement ---
-    st.caption("Move to stage:")
+    # Stage buttons directly under the progress
     adv_cols = st.columns(5)
     
     with adv_cols[0]:
@@ -409,14 +384,23 @@ def calendar_contact_card(lead_id):
     with adv_cols[2]:
         if current_pipeline < 2:
             if st.button("📋 Proposal", key=f"card_to_prop_{lead_id}", use_container_width=True):
-                st.session_state[f"show_prop_picker_{lead_id}"] = True
+                db.update_lead_status(lead_id, "Proposal", datetime.now().strftime("%Y-%m-%d"))
+                st.toast("📋 Moved to Proposal!")
+                time.sleep(0.5)
+                st.rerun()
         elif current_pipeline == 2:
             st.button("▶ Proposal", key=f"card_at_prop_{lead_id}", disabled=True, use_container_width=True)
     
     with adv_cols[3]:
         if current_pipeline < 3:
             if st.button("🏆 Secured", key=f"card_to_sec_{lead_id}", type="primary", use_container_width=True):
-                st.session_state[f"show_sec_picker_{lead_id}"] = True
+                db.update_lead_status(lead_id, "Secured")
+                if lead.get('Value', 0):
+                    db.update_lead_value(lead_id, lead['Value'])
+                st.toast("🏆 SPONSOR SECURED!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
         else:
             st.button("🏆 Secured", key=f"card_at_sec_{lead_id}", disabled=True, use_container_width=True)
     
@@ -427,7 +411,7 @@ def calendar_contact_card(lead_id):
             time.sleep(0.5)
             st.rerun()
     
-    # --- Discovery Call Date/Time Picker ---
+    # --- Discovery Call Date/Time Picker (only when Discovery clicked) ---
     if st.session_state.get(f"show_disc_picker_{lead_id}"):
         with st.container(border=True):
             st.markdown("**📞 Schedule Discovery Call**")
@@ -440,49 +424,34 @@ def calendar_contact_card(lead_id):
             if st.button("✅ Confirm — Book Discovery Call", key=f"disc_confirm_{lead_id}", type="primary"):
                 call_date_str = disc_date.strftime("%Y-%m-%d")
                 db.update_lead_status(lead_id, "Call Booked", call_date_str)
-                # Save time to notes
                 lead_notes['call_time'] = disc_time.strftime("%H:%M")
                 lead_notes['call_date'] = call_date_str
                 db.update_lead_notes(lead_id, lead_notes)
-                st.toast(f"📞 Discovery Call booked for {call_date_str} at {disc_time.strftime('%H:%M')}")
+                st.toast(f"📞 Call booked: {call_date_str} at {disc_time.strftime('%H:%M')}")
                 st.session_state.pop(f"show_disc_picker_{lead_id}", None)
                 time.sleep(0.5)
                 st.rerun()
     
-    # --- Proposal Date Picker ---
-    if st.session_state.get(f"show_prop_picker_{lead_id}"):
-        with st.container(border=True):
-            st.markdown("**📋 Schedule Proposal Send**")
-            prop_date = st.date_input("Send Date", value=datetime.now() + timedelta(days=3), key=f"prop_date_{lead_id}")
-            
-            if st.button("✅ Confirm — Move to Proposal", key=f"prop_confirm_{lead_id}", type="primary"):
-                prop_date_str = prop_date.strftime("%Y-%m-%d")
-                db.update_lead_status(lead_id, "Proposal", prop_date_str)
-                st.toast(f"📋 Proposal scheduled for {prop_date_str}")
-                st.session_state.pop(f"show_prop_picker_{lead_id}", None)
-                time.sleep(0.5)
-                st.rerun()
-    
-    # --- Secured Confirmation ---
-    if st.session_state.get(f"show_sec_picker_{lead_id}"):
-        with st.container(border=True):
-            st.markdown("**🏆 Mark as Secured!**")
-            sec_c1, sec_c2 = st.columns(2)
-            with sec_c1:
-                deal_value = st.number_input("Deal Value (£)", min_value=0, value=0, step=500, key=f"sec_value_{lead_id}")
-            with sec_c2:
-                sec_date = st.date_input("Date Secured", value=datetime.now(), key=f"sec_date_{lead_id}")
-            
-            if st.button("🏆 Confirm — Sponsor Secured!", key=f"sec_confirm_{lead_id}", type="primary"):
-                sec_date_str = sec_date.strftime("%Y-%m-%d")
-                db.update_lead_status(lead_id, "Secured", sec_date_str)
-                if deal_value > 0:
-                    db.update_lead_value(lead_id, deal_value)
-                st.toast("🏆 SPONSOR SECURED!")
-                st.balloons()
-                st.session_state.pop(f"show_sec_picker_{lead_id}", None)
-                time.sleep(1)
-                st.rerun()
+    # --- Next Action metrics ---
+    next_action = lead.get('Next Action', '')
+    na1, na2 = st.columns([1, 1])
+    with na1:
+        if next_action:
+            st.metric("📅 Next Contact", str(next_action))
+        else:
+            st.metric("📅 Next Contact", "Not scheduled")
+    with na2:
+        if current_pipeline == 0 and not is_sequence_done:
+            st.metric("📨 Next Step", seq_options[current_step_idx].split(":")[0])
+        elif is_sequence_done:
+            st.metric("📨 Next Step", "Book Discovery Call")
+        elif current_pipeline == 1:
+            call_time = lead_notes.get('call_time', '')
+            st.metric("📨 Next Step", f"Discovery Call{' @ ' + call_time if call_time else ''}")
+        elif current_pipeline == 2:
+            st.metric("📨 Next Step", "Send Proposal")
+        else:
+            st.metric("📨 Next Step", "✅ Secured!")
     
     st.divider()
     
