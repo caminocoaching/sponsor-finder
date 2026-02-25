@@ -10,7 +10,7 @@ import json
 from search_service import mock_search_places, search_google_places, search_google_legacy_nearby, search_outscraper
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
-from enrichment_service import search_apollo_people, extract_domain
+from enrichment_service import search_apollo_people, extract_domain, find_linkedin_company_page
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
@@ -1157,7 +1157,7 @@ with st.sidebar:
 # Workflow: 1. Search -> 2. Outreach -> 3. Manage
 
 # [FIX] Use Radio for Navigation so we can switch programmatically
-TABS = [" Search & Add", "✉️ Outreach Assistant", "📊 Active Campaign"]
+TABS = [" Search & Add", "✉️ Outreach Assistant", "📊 Active Campaign", "📰 Bulk Mailer"]
 if "current_tab" not in st.session_state:
     st.session_state.current_tab = TABS[0]
 
@@ -1852,7 +1852,7 @@ if current_tab == " Search & Add":
         # --- RESULTS SUMMARY ---
         total = len(df_results)
         high_q = len(df_results[df_results.get("Quality", 0) >= 4]) if "Quality" in df_results.columns else 0
-        st.caption(f"📊 **{total} results** found • {high_q} high-quality leads (4-5⭐)")
+        st.caption(f"📊 **{total} results** found • {high_q} high-quality leads (4+⭐)")
                 
         # --- BUILD DISPLAY COLUMNS ---
         disp_cols = ["In List", "Business Name", "Address"]
@@ -1863,6 +1863,8 @@ if current_tab == " Search & Add":
             disp_cols.append("Size")
         if "Socials" in df_results.columns:
             disp_cols.append("Socials")
+        if "Email" in df_results.columns:
+            disp_cols.append("Email")
         if "Distance" in df_results.columns:
             disp_cols.append("Distance")
         
@@ -1876,6 +1878,7 @@ if current_tab == " Search & Add":
                     "Score": st.column_config.TextColumn("Quality", width="small"),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
                     "Socials": st.column_config.TextColumn("Social", width="small"),
+                    "Email": st.column_config.TextColumn("Email", width="medium"),
                     "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
                     "In List": st.column_config.TextColumn("Added", width="small"),
                 }
@@ -1936,7 +1939,27 @@ if current_tab == " Search & Add":
                         enriched_notes["company_size"] = row["Size"]
                     if row.get("Quality"):
                         enriched_notes["quality_score"] = int(row["Quality"])
-                    
+                    if row.get("Email"):
+                        enriched_notes["email"] = row["Email"]
+                    if row.get("Emails") and isinstance(row["Emails"], list):
+                        enriched_notes["emails"] = row["Emails"]
+
+                    # --- LINKEDIN COMPANY PAGE LOOKUP ---
+                    # Only search if we don't already have a LinkedIn from social enrichment
+                    has_linkedin = enriched_notes.get("contact_url", "").startswith("http") or \
+                                   (enriched_notes.get("social_links", {}).get("linkedin") if isinstance(enriched_notes.get("social_links"), dict) else False)
+                    if not has_linkedin:
+                        os_key = st.session_state.user_profile.get("outscraper_key", "")
+                        if os_key:
+                            st.toast(f"🔗 Searching LinkedIn company page for {b_name}...")
+                            li_url = find_linkedin_company_page(os_key, b_name, b_loc)
+                            if li_url:
+                                enriched_notes["linkedin_company"] = li_url
+                                # Set as contact_url if we don't have one yet
+                                if not enriched_notes.get("contact_url"):
+                                    enriched_notes["contact_url"] = li_url
+                                st.success(f"🔗 Found LinkedIn: {li_url}")
+
                     notes_json = json.dumps(enriched_notes) if enriched_notes else "{}"
                     
                     try:
@@ -2492,6 +2515,16 @@ Supply a source URL for every data point. Do not guess emails."""
                             if social.get('instagram'): links.append(f"[Instagram]({social['instagram']})")
                             if links:
                                 st.markdown("**Social:** " + " • ".join(links))
+
+                        # LinkedIn Company Page (from dedicated lookup)
+                        li_company = existing_notes.get('linkedin_company', '')
+                        if li_company:
+                            st.markdown(f"**LinkedIn Company:** [{li_company.split('/company/')[-1].strip('/')}]({li_company})")
+
+                        # Email from enrichment
+                        enriched_email = existing_notes.get('email', '')
+                        if enriched_email:
+                            st.markdown(f"**Email:** {enriched_email}")
                     
                     homework_notes = st.text_area(
                         "✏️ Your homework notes (2-3 things you noticed about their business)",
@@ -3209,3 +3242,562 @@ Custom packages available — let's build something that fits your exact objecti
                         save_notes['proposal_prompt_generated'] = True
                         save_notes['proposal_generated_date'] = datetime.now().strftime("%Y-%m-%d %H:%M")
                         db.update_lead_notes(lead['id'], save_notes)
+
+# =============================================================================
+# TAB 4: BULK MAILER
+# =============================================================================
+if current_tab == "📰 Bulk Mailer":
+    st.subheader("📰 Bulk Mailer")
+    st.caption("Send newsletters and follow-up emails in batches through your email app.")
+    
+    # Load all leads
+    all_leads_mail = db.get_leads(st.session_state.user_id)
+    
+    if not all_leads_mail:
+        st.info("No leads found. Go to 'Search & Add' to build your list first.")
+    else:
+        # --- EXTRACT EMAILS FROM LEADS ---
+        def _extract_lead_emails(leads_list):
+            """Extract leads that have email addresses from notes."""
+            leads_with_email = []
+            for lead in leads_list:
+                notes = lead.get('Notes', {})
+                if isinstance(notes, str):
+                    try: notes = json.loads(notes)
+                    except: notes = {}
+                if not isinstance(notes, dict): notes = {}
+                
+                email = notes.get('email', '')
+                emails_list = notes.get('emails', [])
+                
+                # Collect all valid emails
+                all_emails = []
+                if email and '@' in str(email):
+                    all_emails.append(str(email).strip())
+                if isinstance(emails_list, list):
+                    for e in emails_list:
+                        if e and '@' in str(e) and str(e).strip() not in all_emails:
+                            all_emails.append(str(e).strip())
+                
+                if all_emails:
+                    leads_with_email.append({
+                        'id': lead['id'],
+                        'name': lead['Business Name'],
+                        'contact': lead.get('Contact Name', ''),
+                        'sector': lead.get('Sector', ''),
+                        'email': all_emails[0],  # Primary email
+                        'all_emails': all_emails,
+                        'status': lead.get('Status', 'Pipeline'),
+                        'next_action': lead.get('Next Action', ''),
+                        'notes': notes
+                    })
+            return leads_with_email
+        
+        leads_with_email = _extract_lead_emails(all_leads_mail)
+        
+        # Stats bar
+        stat_c1, stat_c2, stat_c3, stat_c4 = st.columns(4)
+        stat_c1.metric("Total Leads", len(all_leads_mail))
+        stat_c2.metric("With Email", len(leads_with_email))
+        stat_c3.metric("Without Email", len(all_leads_mail) - len(leads_with_email))
+        
+        # Count follow-ups due today
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        due_today = [l for l in leads_with_email if l['next_action'] and l['next_action'] <= today_str]
+        stat_c4.metric("Follow-ups Due", len(due_today))
+        
+        st.divider()
+        
+        # --- SUB-MODES ---
+        mail_mode = st.radio("Mode", ["📰 Newsletter Blast", "📬 Follow-Up Emails"], horizontal=True, key="mail_mode")
+        
+        # =================================================================
+        # MODE 1: NEWSLETTER BLAST
+        # =================================================================
+        if mail_mode == "📰 Newsletter Blast":
+            st.markdown("### 📰 AI Newsletter Generator")
+            st.caption("Generate a newsletter update, then send it in batches of 10 via BCC through your email app.")
+            
+            if not leads_with_email:
+                st.warning("⚠️ None of your leads have email addresses. Enrich your leads first (Search & Add → auto-enrich captures emails).")
+            else:
+                # --- FILTER CONTACTS ---
+                with st.expander("🎯 Select Recipients", expanded=True):
+                    filter_col1, filter_col2 = st.columns(2)
+                    with filter_col1:
+                        status_filter = st.multiselect(
+                            "Filter by Status",
+                            options=list(set(l['status'] for l in leads_with_email)),
+                            default=list(set(l['status'] for l in leads_with_email)),
+                            key="nl_status_filter"
+                        )
+                    with filter_col2:
+                        sector_filter = st.multiselect(
+                            "Filter by Sector",
+                            options=list(set(l['sector'] for l in leads_with_email if l['sector'])),
+                            default=list(set(l['sector'] for l in leads_with_email if l['sector'])),
+                            key="nl_sector_filter"
+                        )
+                    
+                    filtered = [l for l in leads_with_email 
+                               if l['status'] in status_filter 
+                               and (l['sector'] in sector_filter or not l['sector'])]
+                    
+                    st.info(f"**{len(filtered)} contacts** selected → **{(len(filtered) + 9) // 10} batches** of up to 10")
+                    
+                    # Show recipient list
+                    if filtered:
+                        with st.expander(f"👀 Preview Recipients ({len(filtered)})"):
+                            for i, lead in enumerate(filtered):
+                                st.caption(f"{i+1}. {lead['name']} — {lead['email']} ({lead['status']})")
+                
+                st.divider()
+                
+                # --- NEWSLETTER CONTENT ---
+                st.markdown("### ✍️ Newsletter Content")
+                
+                # AI generation context
+                nl_type = st.selectbox("Newsletter Type", [
+                    "🏁 Season Update — Results & upcoming events",
+                    "🤝 Partnership Spotlight — What sponsors are getting",
+                    "📊 Value Report — Audience reach & brand exposure stats",
+                    "🎉 Milestone Announcement — Achievement or news",
+                    "✏️ Custom — Write your own"
+                ], key="nl_type")
+                
+                # Subject line
+                default_subjects = {
+                    "🏁 Season Update": f"🏁 {rider_name} — Season Update | {championship}",
+                    "🤝 Partnership Spotlight": f"🤝 What Our Partners Are Getting This Season | {rider_name}",
+                    "📊 Value Report": f"📊 Your Brand in Front of {audience_size}+ Fans | {rider_name}",
+                    "🎉 Milestone Announcement": f"🎉 Big News from {rider_name} | {championship}",
+                    "✏️ Custom": f"{rider_name} — Update"
+                }
+                
+                # Match subject to type
+                subject_default = ""
+                for key_prefix, subj in default_subjects.items():
+                    if nl_type.startswith(key_prefix):
+                        subject_default = subj
+                        break
+                
+                nl_subject = st.text_input("Subject Line", value=subject_default, key="nl_subject")
+                
+                # Generate AI body
+                nl_templates = {
+                    "🏁 Season Update — Results & upcoming events": f"""Hi there,
+
+I wanted to share a quick update on my {championship} season.
+
+{f"Last season in {prev_champ}, I achieved: {achievements}." if achievements else ""}
+{f"This year, my goal is: {season_goal}." if season_goal else ""}
+
+The next race is coming up soon and the momentum is building. {f"With {audience_size}+ fans per event" if audience_size else "With a growing fanbase"}, there's a real opportunity for businesses to get their brand in front of an engaged, passionate audience.
+
+{f"As part of {team_name}, we're" if team_name else "We're"} always looking for forward-thinking businesses to join our journey — not just as sponsors, but as genuine partners.
+
+If that sounds interesting, I'd love a quick 10-minute call to see if there's a fit. No pressure, no pitch — just a conversation.
+
+Best regards,
+{rider_name}
+{championship}""",
+
+                    "🤝 Partnership Spotlight — What sponsors are getting": f"""Hi there,
+
+I often get asked: "What do your partners actually get?"
+
+Here's the honest answer — it's not just a logo on a {user_profile.get('vehicle', 'vehicle')}. Our partners get:
+
+✅ Brand visibility in front of {audience_size}+ fans per event
+✅ VIP hospitality they use for client entertainment and team rewards
+✅ Exclusive content for their own marketing campaigns
+✅ A genuine story to tell — partnering with a competitive athlete in {championship}
+{f"✅ Television exposure to {tv_viewers} viewers" if tv_viewers and tv_viewers != "N/A" else ""}
+
+The businesses that get the most out of this are the ones that treat it as a marketing channel, not a charity donation. And that's exactly how I approach every partnership.
+
+If you've been sitting on the fence, I'd love a quick chat to explore whether your business could benefit.
+
+Best regards,
+{rider_name}""",
+
+                    "📊 Value Report — Audience reach & brand exposure stats": f"""Hi there,
+
+Quick numbers update from the {championship} season so far:
+
+📊 {audience_size}+ live fans per event
+{f"📺 {tv_viewers} TV viewers per round" if tv_viewers and tv_viewers != "N/A" else ""}
+🏆 {f"Achievements: {achievements}" if achievements else "Competitive results throughout the season"}
+📱 Growing social media reach across all platforms
+
+What does this mean for a partner business? It means your brand gets seen by thousands of engaged, passionate motorsport fans — the kind of audience that's hard to reach through traditional advertising.
+
+I still have limited partnership spots available for this season. If you'd like to know more about what that could look like for your business, I'm happy to have a quick 10-minute chat.
+
+Best regards,
+{rider_name}
+{championship}""",
+
+                    "🎉 Milestone Announcement — Achievement or news": f"""Hi there,
+
+I'm excited to share some big news!
+
+[— Enter your milestone here —]
+
+This is a testament to the hard work and dedication of {f"the whole {team_name} team" if team_name else "everyone involved"}, and it wouldn't be possible without the support of our partners.
+
+As we build on this momentum heading into the next round of {championship}, I'm looking for one or two more businesses to join us for the ride.
+
+If your business could benefit from associating with a winning motorsport story, I'd love to chat.
+
+Best regards,
+{rider_name}""",
+
+                    "✏️ Custom — Write your own": f"""Hi there,
+
+[Write your newsletter content here]
+
+Best regards,
+{rider_name}
+{championship}"""
+                }
+                
+                nl_body_default = nl_templates.get(nl_type, nl_templates["✏️ Custom — Write your own"])
+                nl_body = st.text_area("Newsletter Body", value=nl_body_default, height=350, key="nl_body")
+                
+                st.divider()
+                
+                # --- BATCH SENDER ---
+                if filtered and nl_subject and nl_body:
+                    st.markdown("### 📤 Send in Batches")
+                    st.caption("Each batch opens your email app with up to 10 contacts in BCC. Click 'Send' in your email app, then come back and click the next batch.")
+                    
+                    # Settings
+                    set_c1, set_c2 = st.columns(2)
+                    with set_c1:
+                        batch_size = st.number_input("Contacts per batch", min_value=1, max_value=20, value=10, key="batch_size")
+                    with set_c2:
+                        sender_email = st.text_input("Your 'From' email (for mailto):", value=st.session_state.user_email, key="sender_email")
+                    
+                    # Create batches
+                    batches = []
+                    for i in range(0, len(filtered), batch_size):
+                        batches.append(filtered[i:i+batch_size])
+                    
+                    # Track sent batches
+                    if "sent_batches" not in st.session_state:
+                        st.session_state.sent_batches = set()
+                    
+                    # Progress
+                    sent_count = len(st.session_state.sent_batches)
+                    total_batches = len(batches)
+                    
+                    if sent_count == total_batches and total_batches > 0:
+                        st.success(f"🎉 All {total_batches} batches sent! {len(filtered)} contacts reached.")
+                        if st.button("🔄 Reset Batch Tracker"):
+                            st.session_state.sent_batches = set()
+                            st.rerun()
+                    else:
+                        st.progress(sent_count / max(total_batches, 1), text=f"Sent {sent_count}/{total_batches} batches")
+                    
+                    st.markdown("---")
+                    
+                    # Important note about mailto length limits
+                    st.info("💡 **How it works:** The BCC addresses are set automatically. The email body is copied to your clipboard — just paste it into the email body after your email app opens.")
+                    
+                    # Display batches
+                    for batch_idx, batch in enumerate(batches):
+                        batch_num = batch_idx + 1
+                        is_sent = batch_idx in st.session_state.sent_batches
+                        
+                        bcc_emails = [l['email'] for l in batch]
+                        bcc_str = ",".join(bcc_emails)
+                        
+                        # Build mailto link (subject + BCC only, body via clipboard)
+                        encoded_subject = urllib.parse.quote(nl_subject)
+                        mailto_link = f"mailto:?bcc={urllib.parse.quote(bcc_str)}&subject={encoded_subject}"
+                        
+                        # Batch card
+                        with st.expander(
+                            f"{'✅' if is_sent else '📧'} Batch {batch_num} — {len(batch)} contacts" + 
+                            (" ✓ SENT" if is_sent else ""),
+                            expanded=not is_sent
+                        ):
+                            # Show contacts in this batch
+                            for l in batch:
+                                st.caption(f"  • {l['name']} — {l['email']}")
+                            
+                            st.markdown("---")
+                            
+                            bc1, bc2, bc3 = st.columns([1.5, 1, 1])
+                            
+                            with bc1:
+                                # Copy body button (using st.code for copy icon)
+                                st.markdown("**Step 1:** Copy the newsletter body")
+                                st.code(nl_body, language=None)
+                            
+                            with bc2:
+                                st.markdown("**Step 2:** Open email")
+                                st.link_button(
+                                    f"📧 Open Batch {batch_num}",
+                                    mailto_link,
+                                    type="primary" if not is_sent else "secondary"
+                                )
+                                st.caption("Opens your email app with BCC pre-filled")
+                            
+                            with bc3:
+                                st.markdown("**Step 3:** Mark as sent")
+                                if not is_sent:
+                                    if st.button(f"✅ Mark Batch {batch_num} Sent", key=f"mark_batch_{batch_idx}"):
+                                        st.session_state.sent_batches.add(batch_idx)
+                                        st.balloons()
+                                        st.rerun()
+                                else:
+                                    st.success("Sent ✓")
+                
+                else:
+                    if not filtered:
+                        st.warning("No contacts selected. Adjust your filters above.")
+                    elif not nl_subject:
+                        st.warning("Please enter a subject line.")
+        
+        # =================================================================
+        # MODE 2: FOLLOW-UP EMAILS
+        # =================================================================
+        elif mail_mode == "📬 Follow-Up Emails":
+            st.markdown("### 📬 Follow-Up Emails Due")
+            st.caption("Personalised follow-up emails for leads with a scheduled follow-up date of today or earlier.")
+            
+            if not leads_with_email:
+                st.warning("⚠️ None of your leads have email addresses yet.")
+            else:
+                # Filter leads due for follow-up
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                
+                fu_filter = st.radio("Show", ["📅 Due Today & Overdue", "📋 All Leads with Email", "🔴 Overdue Only"], horizontal=True, key="fu_filter")
+                
+                if fu_filter == "📅 Due Today & Overdue":
+                    followup_leads = [l for l in leads_with_email if l['next_action'] and l['next_action'] <= today_str]
+                elif fu_filter == "🔴 Overdue Only":
+                    followup_leads = [l for l in leads_with_email if l['next_action'] and l['next_action'] < today_str]
+                else:
+                    followup_leads = leads_with_email
+                
+                if not followup_leads:
+                    st.success("🎉 No follow-ups due! You're all caught up.")
+                else:
+                    st.info(f"**{len(followup_leads)} leads** ready for follow-up")
+                    
+                    # --- BATCH FOLLOW-UP (same message to all) ---
+                    st.markdown("---")
+                    fu_approach = st.radio("Approach", ["📝 Individual (personalised per lead)", "📦 Batch (same message, BCC groups of 10)"], horizontal=True, key="fu_approach")
+                    
+                    if fu_approach == "📦 Batch (same message, BCC groups of 10)":
+                        st.markdown("#### 📦 Batch Follow-Up")
+                        st.caption("Send the same follow-up message to all due leads in BCC batches.")
+                        
+                        fu_subject = st.text_input("Subject Line", value=f"Quick follow-up — {rider_name} | {championship}", key="fu_batch_subject")
+                        
+                        fu_body_default = f"""Hi there,
+
+I reached out recently about a potential partnership opportunity with {rider_name} in {championship}.
+
+I know things get busy, so I just wanted to check in. If the timing isn't right, no problem at all — just let me know.
+
+If you're still open to a quick 10-minute conversation about how motorsport could work as a marketing channel for your business, I'd love to find a time that works.
+
+Best regards,
+{rider_name}"""
+                        
+                        fu_body = st.text_area("Follow-up Body", value=fu_body_default, height=250, key="fu_batch_body")
+                        
+                        if fu_subject and fu_body:
+                            # Create batches
+                            fu_batch_size = st.number_input("Contacts per batch", min_value=1, max_value=20, value=10, key="fu_batch_size")
+                            fu_batches = []
+                            for i in range(0, len(followup_leads), fu_batch_size):
+                                fu_batches.append(followup_leads[i:i+fu_batch_size])
+                            
+                            if "fu_sent_batches" not in st.session_state:
+                                st.session_state.fu_sent_batches = set()
+                            
+                            st.progress(
+                                len(st.session_state.fu_sent_batches) / max(len(fu_batches), 1),
+                                text=f"Sent {len(st.session_state.fu_sent_batches)}/{len(fu_batches)} batches"
+                            )
+                            
+                            st.info("💡 Copy the message body first, then click each batch button to open your email app.")
+                            
+                            # Copyable body
+                            st.markdown("**📋 Copy this message body:**")
+                            st.code(fu_body, language=None)
+                            
+                            st.markdown("---")
+                            
+                            for b_idx, batch in enumerate(fu_batches):
+                                b_sent = b_idx in st.session_state.fu_sent_batches
+                                bcc_str = ",".join([l['email'] for l in batch])
+                                mailto_link = f"mailto:?bcc={urllib.parse.quote(bcc_str)}&subject={urllib.parse.quote(fu_subject)}"
+                                
+                                fbc1, fbc2, fbc3 = st.columns([2, 1, 1])
+                                with fbc1:
+                                    names = ", ".join([l['name'][:20] for l in batch[:3]])
+                                    if len(batch) > 3:
+                                        names += f" +{len(batch)-3} more"
+                                    st.markdown(f"{'✅' if b_sent else '📧'} **Batch {b_idx+1}** ({len(batch)} contacts) — {names}")
+                                with fbc2:
+                                    st.link_button(
+                                        f"📧 Open Batch {b_idx+1}",
+                                        mailto_link,
+                                        type="primary" if not b_sent else "secondary"
+                                    )
+                                with fbc3:
+                                    if not b_sent:
+                                        if st.button(f"✅ Sent", key=f"fu_mark_{b_idx}"):
+                                            st.session_state.fu_sent_batches.add(b_idx)
+                                            st.rerun()
+                                    else:
+                                        st.success("Done ✓")
+                                
+                                st.markdown("---")
+                            
+                            if len(st.session_state.fu_sent_batches) == len(fu_batches) and fu_batches:
+                                st.success(f"🎉 All follow-up batches sent! {len(followup_leads)} contacts reached.")
+                                if st.button("🔄 Reset Follow-Up Tracker", key="reset_fu"):
+                                    st.session_state.fu_sent_batches = set()
+                                    st.rerun()
+                    
+                    else:
+                        # --- INDIVIDUAL FOLLOW-UPS ---
+                        st.markdown("#### 📝 Individual Follow-Ups")
+                        st.caption("Each lead gets a personalised message based on their current outreach step.")
+                        
+                        for idx, lead_fu in enumerate(followup_leads):
+                            notes = lead_fu['notes']
+                            contact_name_fu = lead_fu['contact'] or lead_fu['name']
+                            first_name_fu = contact_name_fu.split()[0] if contact_name_fu else "there"
+                            
+                            # Determine which template step they're on
+                            seq_options_fu = [
+                                "Email: Cold Opener",
+                                "LI Msg 2: Thanks for connecting (Day 2)",
+                                "LI Msg 3: Homework (Day 7)",
+                                "LI Msg 4: Momentum (Day 14)",
+                                "LI Msg 5: Scarcity (Day 21)",
+                                "LI Msg 6: Final (Day 28)"
+                            ]
+                            
+                            last_step = notes.get('outreach_step', -1)
+                            try: last_step = int(last_step)
+                            except: last_step = -1
+                            
+                            next_step_idx = min(last_step + 1, len(seq_options_fu) - 1)
+                            if next_step_idx < 0: next_step_idx = 0
+                            next_template = seq_options_fu[next_step_idx]
+                            
+                            salutation_fu = notes.get('salutation', 'Mr')
+                            
+                            # Card styling
+                            overdue = lead_fu['next_action'] and lead_fu['next_action'] < today_str
+                            status_icon = "🔴" if overdue else "📅"
+                            
+                            with st.expander(f"{status_icon} {lead_fu['name']} — {contact_name_fu} ({next_template})", expanded=False):
+                                ic1, ic2 = st.columns([2, 1])
+                                with ic1:
+                                    st.caption(f"📧 Email: {lead_fu['email']}")
+                                    st.caption(f"📅 Due: {lead_fu['next_action'] or 'ASAP'}")
+                                    st.caption(f"⏭️ Next step: {next_template}")
+                                
+                                with ic2:
+                                    st.caption(f"Status: {lead_fu['status']}")
+                                    st.caption(f"Sector: {lead_fu['sector']}")
+                                
+                                # Generate personalised message
+                                ctx_fu = {
+                                    "goal": season_goal,
+                                    "prev_champ": prev_champ,
+                                    "achievements": achievements,
+                                    "audience": audience_size,
+                                    "tv": tv_viewers,
+                                    "team": team_name,
+                                    "rep_mode": user_profile.get("rep_mode", False),
+                                    "rep_name": user_profile.get("rep_name", ""),
+                                    "rep_role": user_profile.get("rep_role", "")
+                                }
+                                
+                                # Generate the personalised email using existing template system
+                                personalised_msg = generate_message(
+                                    next_template, lead_fu['name'], rider_name, lead_fu['sector'],
+                                    town=saved_town, championship=championship, extra_context=ctx_fu,
+                                    contact_name=contact_name_fu, salutation=salutation_fu
+                                )
+                                
+                                # Subject line for individual
+                                individual_subject = f"Re: {rider_name} — Partnership Opportunity | {lead_fu['name']}"
+                                if "Cold Opener" in next_template:
+                                    individual_subject = f"{rider_name} — A local partnership opportunity for {lead_fu['name']}"
+                                
+                                i_subject = st.text_input("Subject", value=individual_subject, key=f"fu_subj_{idx}")
+                                final_fu_msg = st.text_area("Message", value=personalised_msg, height=200, key=f"fu_msg_{idx}")
+                                
+                                st.caption("👇 Copy the message, then click to open email:")
+                                st.code(final_fu_msg, language=None)
+                                
+                                # mailto with single recipient (not BCC)
+                                encoded_fu_body = urllib.parse.quote(final_fu_msg[:1500])  # Truncate for URL safety
+                                mailto_fu = f"mailto:{lead_fu['email']}?subject={urllib.parse.quote(i_subject)}&body={encoded_fu_body}"
+                                
+                                ibc1, ibc2 = st.columns(2)
+                                with ibc1:
+                                    st.link_button(f"📧 Email {first_name_fu}", mailto_fu, type="primary")
+                                with ibc2:
+                                    if st.button(f"✅ Mark Sent & Schedule Next", key=f"fu_sent_{idx}"):
+                                        # Calculate next follow-up
+                                        fu_days = 7
+                                        if "Msg 2" in next_template: fu_days = 5
+                                        elif "Msg 6" in next_template: fu_days = 30
+                                        
+                                        next_date = (datetime.now() + timedelta(days=fu_days)).strftime("%Y-%m-%d")
+                                        
+                                        # Update DB
+                                        db.update_lead_status(lead_fu['id'], "Active", next_date)
+                                        
+                                        # Update notes with step
+                                        update_notes = notes.copy()
+                                        update_notes['outreach_step'] = next_step_idx
+                                        update_notes['last_template'] = next_template
+                                        db.update_lead_notes(lead_fu['id'], update_notes)
+                                        
+                                        st.balloons()
+                                        st.success(f"🎉 Sent! Next follow-up: {next_date}")
+                                        time.sleep(1.5)
+                                        st.rerun()
+        
+        st.divider()
+        
+        # --- TIPS ---
+        with st.expander("💡 Bulk Email Tips", expanded=False):
+            st.markdown("""
+### How It Works
+1. **Newsletter Blast** → Your email app opens with BCC addresses pre-filled. Paste the message body and hit Send.
+2. **Follow-Up Emails** → Individual personalised emails based on each lead's outreach stage.
+
+### Why BCC?
+- Recipients **can't see** each other's email addresses
+- Looks like a personal email, not a mass blast
+- Keeps your outreach professional and GDPR-friendly
+
+### Best Practices
+- 🕐 **Send between 8-10am** Tuesday-Thursday for best open rates
+- 📧 **Max 10 per batch** to avoid spam filters
+- ✍️ **Personalise the subject line** — it's the #1 factor in open rates
+- 🔄 **Follow up at least 3 times** — most deals close after the 4th-7th touch
+- 📱 **Keep it short** — under 150 words gets 2x more replies
+
+### Email App Compatibility
+- ✅ Apple Mail — works great
+- ✅ Outlook Desktop — works great
+- ✅ Thunderbird — works great
+- ⚠️ Gmail Web — may truncate long URLs. Use the copy method instead.
+""")
+
