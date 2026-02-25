@@ -183,6 +183,52 @@ SECTOR_SEARCH_OPTIMIZATIONS = {
     "Fast-growing local businesses": ["Award winning business", "Business of the year", "Fast growing company"],
 }
 
+# Real-world motorsport sponsor examples for each sector
+SECTOR_EXAMPLES = {
+    "Motorcycle dealers": "🏍️ e.g. Local Honda/Yamaha/Kawasaki dealers, independent bike shops",
+    "Motorcycle parts & accessories": "🔧 e.g. R&G Crash Protection (BSB), Superbike Unlimited (MotoAmerica)",
+    "Automotive aftermarket & performance": "⚡ e.g. Alpha Racing (BMW MotoAmerica), Performance parts specialists",
+    "Vehicle wrapping & graphics": "🎨 e.g. Race livery companies, fleet wrap specialists",
+    "Paint protection & detailing": "✨ e.g. XPEL (Rahal Ducati MotoAmerica), ceramic coating companies",
+    "Exhaust & performance systems": "💨 e.g. Akrapovič (MotoGP — Ducati, Yamaha, KTM, Honda)",
+    "Crash protection & accessories": "🛡️ e.g. R&G (BSB Official Sponsor — 12 consecutive seasons)",
+    "Accident management & body repair": "🔨 e.g. Accident repair centres, body shop groups",
+    "Oil, lubricants & chemicals": "🛢️ e.g. Repsol (Honda MotoGP), Castrol (LCR Honda), Rock Oil (BSB), Motorex (KTM)",
+    "Fuel & energy companies": "⛽ e.g. Pertamina (VR46 MotoGP), Gulf Oil (Trackhouse MotoGP)",
+    "Precision engineering & CNC": "⚙️ e.g. Beta Utensili (MotoGP tool partner), local CNC/machining firms",
+    "Tool manufacturers & suppliers": "🔩 e.g. Würth Group (KTM MotoGP), professional tool suppliers",
+    "Fabrication & metalwork": "🏗️ e.g. Welding, sheet metal, custom fabrication companies",
+    "Fastening & assembly materials": "🔗 e.g. Würth (KTM Factory Racing), industrial fastener suppliers",
+    "Steel & metals distribution": "🏗️ e.g. AJN Steelstock (BSB — Bimota & Bathams Racing)",
+    "Electrical installation & engineering": "⚡ e.g. Hager Group (PBM Ducati BSB — 12 consecutive years)",
+    "Road surfacing & civil engineering": "🛣️ e.g. MasterMac Surfacing (Honda BSB)",
+    "Building materials & merchants": "🧱 e.g. Builders merchants, timber yards, plumbing suppliers",
+    "Construction companies": "🏗️ e.g. Regional building contractors, civil engineering firms",
+    "HGV haulage & road freight": "🚛 e.g. Revolution Trucking (MotoAmerica), regional hauliers",
+    "Logistics & warehousing": "📦 e.g. DHL (MotoGP), DFDS (BSB), distribution centres",
+    "Precision trucking & fleet": "🚚 e.g. Fleet operators, commercial vehicle companies",
+    "Software & SaaS companies": "💻 e.g. Lenovo (Ducati MotoGP), Atlassian (Trackhouse MotoGP)",
+    "IT services & consulting": "🖥️ e.g. IT managed services, tech consultancies",
+    "Data analytics & AI": "📊 e.g. Data-driven companies, analytics platforms",
+    "Insurance brokers & underwriters": "🛡️ e.g. Prima Assicurazioni (Pramac MotoGP), Carole Nash (BSB), Progressive (MotoAmerica)",
+    "Fintech & digital payments": "💳 e.g. Digital payment companies, crypto platforms",
+    "Wealth management & investment": "💰 e.g. Investment firms, financial planning companies",
+    "Legal services & law firms": "⚖️ e.g. Flo4Law (HSBK Ducati MotoAmerica), Bond Turner, Law Tigers",
+    "Commercial property & development": "🏢 e.g. Liberty St. Development (MotoAmerica), property developers",
+    "Recruitment & staffing": "👥 e.g. Industrial staffing agencies, executive recruiters",
+    "Energy drinks & sports nutrition": "🥤 e.g. Red Bull (KTM MotoGP), Monster Energy (Yamaha MotoGP), ZYN (BSB Title Sponsor)",
+    "Craft brewery & distillery": "🍺 e.g. Bathams Brewery (BSB), independent craft breweries",
+    "Food & beverage manufacturers": "🍫 e.g. Chocolatos/Garudafood (Gresini MotoGP), Lanchester Wines (BSB)",
+    "Online gaming & competitions": "🎮 e.g. Nitrous Competitions (BSB — owned OMG Racing), BK8 (Gresini MotoGP)",
+    "Luxury goods & lifestyle": "💎 e.g. Premium watch brands, luxury lifestyle brands",
+    "Fitness & wellness brands": "💪 e.g. Sports supplement brands, performance gyms",
+    "Printers, signage & branding": "🖨️ e.g. Sign manufacturers, vehicle livery companies",
+    "Automotive lighting & optics": "💡 e.g. Stanley Electric (Honda MotoGP — 'The Value of Light')",
+    "Telecommunications": "📱 e.g. 1p Mobile (BSB Official Sponsor), broadband providers",
+    "Companies already sponsoring motorsport": "🏁 e.g. Companies with existing motorsport partnerships",
+    "Fast-growing local businesses": "🚀 e.g. Award-winning local businesses, fast-growth companies",
+}
+
 DISCOVERY_QUESTIONS = {
     "past_experience": "Have you been involved in sponsorship before — motorsport or otherwise?",
     "ideal_outcome": "If we worked together and it went really well, what would success look like for you?",
@@ -1287,15 +1333,7 @@ with st.sidebar:
     scout_location = ""
     selected_sector = "Target Company"  # Default for Company Scout mode
     
-    if search_mode == "Sector Search":
-        selected_sector = st.selectbox("Target Sector", SECTORS, index=0, key="target_sector_select")
-        if selected_sector == "Other (type your own)":
-            search_query = st.text_input("Enter key words")
-        else:
-            # Use optimized query if available, else default to sector name
-            search_query = SECTOR_SEARCH_OPTIMIZATIONS.get(selected_sector, selected_sector)
-    else:
-        # COMPANY SCOUT MODE
+    if search_mode == "Company Scout":
         st.info("🎯 Enter specific details to analyze a target.")
         scout_company = st.text_input("Company Name")
         scout_location = st.text_input("City / Location", value=saved_town)
@@ -1835,6 +1873,24 @@ if current_tab == " Search & Add":
                         st.error(f"Error reading CSV: {e}")
 
     st.divider()
+
+    # --- SECTOR SELECTOR (Main Page — Sector Search mode) ---
+    if search_mode == "Sector Search":
+        st.subheader("🎯 Choose Your Target Sector")
+        st.caption(f"Searching within **{search_radius} miles** of {location_search_ctx}")
+        
+        selected_sector = st.selectbox("Target Sector", SECTORS, index=0, key="target_sector_select")
+        
+        # Show real-world sponsor examples for this sector
+        if selected_sector in SECTOR_EXAMPLES:
+            st.info(SECTOR_EXAMPLES[selected_sector])
+        
+        if selected_sector == "Other (type your own)":
+            search_query = st.text_input("Enter key words", placeholder="e.g. Window cleaning company")
+        else:
+            search_query = SECTOR_SEARCH_OPTIMIZATIONS.get(selected_sector, selected_sector)
+        
+        st.divider()
 
     # Format query for display
     display_query = f"'{search_query}'"
