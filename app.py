@@ -631,8 +631,13 @@ def _format_contact_name(full_name, template_type, salutation="Mr"):
     if not full_name or full_name.strip() == "":
         return f"{salutation} [Name]"  # Placeholder if no name set
     
-    name_parts = full_name.strip().split()
-    first_name = name_parts[0] if name_parts else full_name
+    # Strip Apollo-style title suffix: "Neil Wearing (Depot Manager)" → "Neil Wearing"
+    clean_name = full_name.strip()
+    if "(" in clean_name:
+        clean_name = clean_name[:clean_name.index("(")].strip()
+    
+    name_parts = clean_name.split()
+    first_name = name_parts[0] if name_parts else clean_name
     last_name = name_parts[-1] if len(name_parts) > 1 else ""
     
     # Email opener: formal addressing with title
@@ -2333,8 +2338,11 @@ if current_tab == "✉️ Outreach Assistant":
                         
                         # Verify Name
                         if lead.get('Contact Name'):
+                            verify_name = lead['Contact Name']
+                            if "(" in verify_name:
+                                verify_name = verify_name[:verify_name.index("(")].strip()
                             st.markdown("**Verify Contact:**")
-                            google_link(f'site:linkedin.com/in "{lead["Contact Name"]}" "{lead["Business Name"]}"', f"Verify '{lead['Contact Name']}'")
+                            google_link(f'site:linkedin.com/in "{verify_name}" "{lead["Business Name"]}"', f"Verify '{verify_name}'")
                             
 
                     # PILLAR 3: FACEBOOK SEARCH & FINDER MODULE
@@ -2605,6 +2613,9 @@ Supply a source URL for every data point. Do not guess emails."""
                 if not isinstance(existing_notes, dict): existing_notes = {}
                 
                 contact_name = lead.get('Contact Name', '') or lead['Business Name']
+                # Strip Apollo-style title suffix: "Neil Wearing (Depot Manager)" → "Neil Wearing"
+                if "(" in contact_name:
+                    contact_name = contact_name[:contact_name.index("(")].strip()
                 first_name = contact_name.split()[0] if contact_name else "there"
                 
                 # ---- AUTO-POPULATED COMPANY INTEL ----
