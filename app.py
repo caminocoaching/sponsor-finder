@@ -2761,6 +2761,45 @@ if current_tab == "✉️ Outreach Assistant":
                         li_people_generic = f"https://www.linkedin.com/search/results/people/?keywords={biz_name_encoded}"
                         st.markdown(f"Or browse: **[People at {lead['Business Name']} on LinkedIn →]({li_people_generic})**")
                 
+                # --- STAGE 3: Company Research (News, Sponsorship, Intel) ---
+                stage3_icon = "📊" if stage1_done else "🔒"
+                stage3_expanded = stage1_done and has_contact
+                
+                with st.expander(f"{stage3_icon} **Stage 3: Company Research & Intel**", expanded=stage3_expanded):
+                    if not stage1_done:
+                        st.caption("Complete Stage 1 first to unlock research links.")
+                    else:
+                        biz_name = lead['Business Name']
+                        st.markdown(f"**Research {biz_name} before reaching out:**")
+                        
+                        r_c1, r_c2 = st.columns(2)
+                        with r_c1:
+                            st.markdown("**📰 News & Updates**")
+                            google_news = f"https://www.google.com/search?q={biz_name_encoded}+news&tbm=nws"
+                            st.markdown(f"[🔍 {biz_name} — Latest News →]({google_news})")
+                            
+                            google_events = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+%22new+contract%22+OR+%22expansion%22+OR+%22award%22+OR+%22growth%22"
+                            st.markdown(f"[🏆 Awards, Contracts & Growth →]({google_events})")
+                            
+                            google_hiring = f"https://www.google.com/search?q={biz_name_encoded}+hiring+OR+recruitment+OR+jobs"
+                            st.markdown(f"[👥 Hiring & Expansion Signals →]({google_hiring})")
+                        
+                        with r_c2:
+                            st.markdown("**🏁 Sponsorship History**")
+                            google_sponsor = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+sponsor+OR+sponsorship+OR+partnership"
+                            st.markdown(f"[🤝 Past Sponsorships →]({google_sponsor})")
+                            
+                            google_charity = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+charity+OR+community+OR+%22corporate+social%22"
+                            st.markdown(f"[❤️ Community & Charity Work →]({google_charity})")
+                            
+                            if is_uk:
+                                ch_num = lead_notes_data.get('ch_company_number', '')
+                                if ch_num:
+                                    ch_filing = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}/filing-history"
+                                    st.markdown(f"[📋 Companies House Filings →]({ch_filing})")
+                        
+                        st.caption("💡 **Use this intel in your message:** mention their recent news, awards, or community work to show you've done your homework.")
+                
                 # Editable contact fields
                 st.caption("Edit contact details:")
                 edit_c1, edit_c2, edit_c3, edit_c4 = st.columns([2, 1, 2, 2])
@@ -2797,53 +2836,15 @@ if current_tab == "✉️ Outreach Assistant":
                 st.divider()
                 
                 # ============================================================
-                # SECTION 2: COMPANY RESEARCH
+                # STAGE 4: CONNECT & MESSAGE
                 # ============================================================
-                st.markdown("### 🔬 Company Research")
-                
-                # Company summary
-                info_parts = []
-                if lead.get('Sector'): info_parts.append(f"**Sector:** {lead['Sector']}")
-                if lead_notes_data.get('industry'): info_parts.append(f"**Industry:** {lead_notes_data['industry']}")
-                emp = lead_notes_data.get('employee_count', '')
-                rev = lead_notes_data.get('revenue', '')
-                if emp: info_parts.append(f"**Size:** {emp} employees")
-                if rev: info_parts.append(f"**Revenue:** {rev}")
-                if lead.get('Website'): info_parts.append(f"**Web:** [{domain}]({lead['Website']})")
-                if lead_notes_data.get('description'):
-                    info_parts.append(f"**About:** {lead_notes_data['description'][:150]}")
-                
-                if info_parts:
-                    st.markdown(" · ".join(info_parts))
-                
-                # Research links
-                def google_link(query, label):
-                    url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
-                    st.markdown(f"• [{label}]({url})")
-                
-                res_c1, res_c2 = st.columns(2)
-                with res_c1:
-                    google_link(f'{lead["Business Name"]} sponsorship', "🏆 Sponsorship History")
-                    google_link(f'"{lead["Business Name"]}" news expansion opening', "📰 News & Growth")
-                    if domain:
-                        google_link(f'"{lead["Business Name"]}" after:2025-01-01', "🕐 Latest News (12mo)")
-                with res_c2:
-                    google_link(f'{lead["Business Name"]}', "🔍 Google Search")
-                    if domain:
-                        google_link(f'"{lead["Business Name"]}" -site:{domain}', "📢 External Press")
-                    company_li = lead_notes_data.get('linkedin_company', '')
-                    if company_li:
-                        st.markdown(f"• [🏢 Company LinkedIn]({company_li})")
-                    else:
-                        li_co = f"https://www.linkedin.com/search/results/companies/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"• [🏢 Find on LinkedIn]({li_co})")
-                
-                st.divider()
-                
-                # ============================================================
-                # SECTION 3: OUTREACH MESSAGE
-                # ============================================================
-                st.markdown("### ✉️ Outreach Message")
+                stage4_ready = has_contact and clean_contact
+                stage4_icon = "✉️" if stage4_ready else "🔒"
+                st.markdown(f"##### {stage4_icon} Stage 4: Connect & Message")
+                if not stage4_ready:
+                    st.info("👆 Complete Stages 1-3 to unlock messaging. Add a contact name and research the company first.")
+                else:
+                    st.success(f"✅ Ready to contact **{clean_contact}** at **{lead['Business Name']}**")
                 
                 if has_linkedin:
                     st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({lead_notes_data['contact_url']})**")
