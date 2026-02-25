@@ -654,8 +654,10 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
     # Format contact name based on message type (formal vs first-name)
     formatted_name = _format_contact_name(contact_name, template_type, salutation)
     
+    # Rider name: full name for intro, first name only after that
+    rider_first = rider_name.split()[0] if rider_name else rider_name
+    
     msg = template.replace("[Business Name]", business_name)\
-                  .replace("[Rider Name]", rider_name)\
                   .replace("[Sector]", sector)\
                   .replace("[Town]", town)\
                   .replace("[Championship Name]", championship)\
@@ -664,6 +666,11 @@ def generate_message(template_type, business_name, rider_name, sector, context_a
                   .replace("[Contact Name]", formatted_name)\
                   .replace("[Current Year]", "2026")\
                   .replace("Good morning", _get_time_greeting())
+    
+    # Replace first [Rider Name] with full name, rest with first name only
+    if "[Rider Name]" in msg:
+        msg = msg.replace("[Rider Name]", rider_name, 1)  # First occurrence: full name
+        msg = msg.replace("[Rider Name]", rider_first)     # All remaining: first name only
                   
     msg = msg.replace("[Season Goal]", extra_context.get("goal", ""))\
              .replace("[Previous Champ]", extra_context.get("prev_champ", ""))\
