@@ -2885,6 +2885,14 @@ if current_tab == "✉️ Outreach Assistant":
                     
                     final_msg = st.text_area("Edit Message:", value=draft, height=200)
                     
+                    # LinkedIn Connect Note character limit
+                    if "Connect" in tpl:
+                        char_count = len(final_msg)
+                        if char_count <= 300:
+                            st.caption(f"✅ **LinkedIn Connect Note: {char_count}/300 characters** — paste this into the 'Add a note' box when connecting")
+                        else:
+                            st.warning(f"⚠️ **{char_count}/300 characters** — LinkedIn connect notes are limited to 300 characters. Trim {char_count - 300} characters.")
+                    
                     st.caption("👇 Click the Copy icon in the top right of the box below")
                     st.code(final_msg, language=None)
                     
