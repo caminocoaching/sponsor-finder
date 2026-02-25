@@ -2686,7 +2686,7 @@ if current_tab == "✉️ Outreach Assistant":
                 stage1_done = has_contact or has_directors
                 stage1_icon = "✅" if stage1_done else "🔍"
                 
-                with st.expander(f"{stage1_icon} **Stage 1: Find the Company & Directors**", expanded=not stage1_done):
+                with st.expander(f"{stage1_icon} **Stage 1: Find the Company & Directors**", expanded=True):
                     if has_directors:
                         ch_dirs = lead_notes_data.get('ch_directors', [])
                         ch_pscs = lead_notes_data.get('ch_pscs', [])
@@ -2735,7 +2735,7 @@ if current_tab == "✉️ Outreach Assistant":
                     contact_encoded = urllib.parse.quote_plus(clean_contact)
                     contact_and_co = urllib.parse.quote_plus(f"{clean_contact} {lead['Business Name']}")
                     
-                    with st.expander(f"👤 **Stage 2: Find {clean_contact}'s Profile**", expanded=True):
+                    with st.expander(f"👤 **Stage 2: Find {clean_contact}'s Profile**", expanded=False):
                         st.markdown(f"**Now find {clean_contact}'s profile to connect with them:**")
                         
                         s2_c1, s2_c2 = st.columns(2)
@@ -2765,7 +2765,7 @@ if current_tab == "✉️ Outreach Assistant":
                 stage3_icon = "📊" if stage1_done else "🔒"
                 stage3_expanded = stage1_done and has_contact
                 
-                with st.expander(f"{stage3_icon} **Stage 3: Company Research & Intel**", expanded=stage3_expanded):
+                with st.expander(f"{stage3_icon} **Stage 3: Company Research & Intel**", expanded=False):
                     if not stage1_done:
                         st.caption("Complete Stage 1 first to unlock research links.")
                     else:
