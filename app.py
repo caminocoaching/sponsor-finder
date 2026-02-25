@@ -2619,18 +2619,37 @@ Supply a source URL for every data point. Do not guess emails."""
                 
             elif stage == "3. Proposal":
                 st.subheader(f"📝 Proposal Creator for {lead['Business Name']}")
-                st.caption("Auto-filled from your Profile & Discovery Call. Edit any section below to perfect your '10/10 Template'.")
+                st.caption("Based on *The Blueprint of Approval: Strategic Architecture for Winning Motorsport Sponsorship Proposals*")
                 
                 # --- PREPARE DATA ---
                 r_name = st.session_state.user_name
                 r_series = championship
                 r_bio = st.session_state.user_profile.get('bio', f"A competitive racer in {r_series}. Known for consistency and speed.")
-                r_audience = f"{st.session_state.user_profile.get('social_following', 'Growing')} Followers"
+                r_audience = st.session_state.user_profile.get('audience', 'Growing')
+                r_town = st.session_state.user_profile.get('town', '')
+                r_country = st.session_state.user_profile.get('country', '')
+                r_vehicle = st.session_state.user_profile.get('vehicle', 'Vehicle')
+                r_competitors = st.session_state.user_profile.get('competitors', 20)
+                r_spectators = st.session_state.user_profile.get('audience', '5000')
+                r_tv = st.session_state.user_profile.get('tv', '') if st.session_state.user_profile.get('televised') == "Yes" else ""
+                r_streamed = st.session_state.user_profile.get('streamed', 'No')
+                r_goal = season_goal
+                r_prev_champ = prev_champ
+                r_achievements = achievements
+                r_team = team_name
                 l_name = lead['Business Name']
+                l_sector = lead.get('Sector', '')
+                l_website = lead.get('Website', '')
+                l_address = lead.get('Address', '')
+                l_contact = lead.get('Contact Name', '')
                 l_notes = lead.get('Notes', {})
+                if isinstance(l_notes, str):
+                    try: l_notes = json.loads(l_notes)
+                    except: l_notes = {}
+                if not isinstance(l_notes, dict): l_notes = {}
 
                 # Deep Discovery Context
-                disc_context = "**Deep Discovery Findings (Client Voice):**\n"
+                disc_context = ""
                 has_answers = False
                 disc_keys = {
                     "past_experience": "Sponsorship Experience",
@@ -2648,15 +2667,518 @@ Supply a source URL for every data point. Do not guess emails."""
                         disc_context += f"- **{label}:** \"{answer}\"\n"
                 
                 if not has_answers:
-                     st.warning("⚠️ No Discovery Data found. Complete the Discovery Call first for best results.")
+                     st.warning("⚠️ No Discovery Call data found. Complete the Discovery Call first — proposals built from client voice have 3x higher close rate.")
+                else:
+                    st.success("✅ Discovery Call data loaded — your proposal will be tailored to their exact needs.")
 
-                # --- STEP 1: PROPOSAL WORKFLOW (BLANKED) ---
-                st.markdown("### 📝 Proposal Generator")
-                st.info("🚧 **Under Construction**: We are defining the best workflow for V2.18 Slide Generation.")
-                st.caption("The previous 'YES-GENERATING' template has been backed up while we refine this page.")
+                # --- COMPANY LOGO ---
+                st.markdown("---")
+                st.markdown("### 🏢 Company Branding")
                 
-                # Placeholder for future workflow
-                # st.markdown("#### Upcoming Features:")
-                # st.markdown("- Drag & Drop Slide Ordering")
-                # st.markdown("- AI-Powered Content Writing")
-                # st.markdown("- PDF Export")
+                logo_col1, logo_col2 = st.columns([1, 1])
+                with logo_col1:
+                    st.markdown("**Company Logo**")
+                    st.caption("We'll try to auto-fetch the logo from their website. You can also upload one manually.")
+                    
+                    logo_source = st.radio("Logo Source", ["Auto-fetch from website", "Upload manually"], key="logo_src", horizontal=True)
+                    
+                    company_logo_url = ""
+                    uploaded_logo = None
+                    
+                    if logo_source == "Auto-fetch from website":
+                        if l_website:
+                            domain = l_website.replace("https://", "").replace("http://", "").replace("www.", "").strip("/").split("/")[0]
+                            company_logo_url = f"https://logo.clearbit.com/{domain}"
+                            st.image(company_logo_url, width=150, caption=f"Auto-fetched: {domain}")
+                            st.caption("💡 Logo fetched from Clearbit. If this doesn't look right, switch to manual upload.")
+                        else:
+                            st.info("No website on file — please upload the logo manually or add their website in the Connect stage.")
+                    else:
+                        uploaded_logo = st.file_uploader("Upload Company Logo", type=["png", "jpg", "jpeg", "svg"], key="upload_logo")
+                        if uploaded_logo:
+                            st.image(uploaded_logo, width=150, caption="Uploaded Logo")
+                
+                with logo_col2:
+                    st.markdown("**Your Photos**")
+                    st.caption("Upload a professional headshot and action photo for the proposal deck.")
+                    
+                    uploaded_headshot = st.file_uploader("Your Headshot / Portrait", type=["png", "jpg", "jpeg"], key="upload_headshot")
+                    if uploaded_headshot:
+                        st.image(uploaded_headshot, width=120, caption="Headshot")
+                    
+                    uploaded_action = st.file_uploader(f"Action Photo ({r_vehicle})", type=["png", "jpg", "jpeg"], key="upload_action")
+                    if uploaded_action:
+                        st.image(uploaded_action, width=200, caption="Action Photo")
+                
+                # Background / Theme
+                st.markdown("---")
+                bg_col1, bg_col2 = st.columns(2)
+                with bg_col1:
+                    deck_theme = st.selectbox("Deck Theme", [
+                        "Dark & Premium (Carbon Fiber)", 
+                        "Clean White & Professional",
+                        "Racing Red & Black",
+                        "Corporate Blue & Grey",
+                        "Custom (Sponsor Brand Colors)"
+                    ], key="deck_theme")
+                with bg_col2:
+                    uploaded_mockup = st.file_uploader(f"Livery Mockup (Optional — {r_vehicle} in sponsor colors)", type=["png", "jpg", "jpeg"], key="upload_mockup")
+                    if uploaded_mockup:
+                        st.image(uploaded_mockup, width=200, caption="Livery Mockup")
+
+                # ============================================
+                # THE 12-SLIDE YES-GENERATING PROPOSAL BUILDER
+                # ============================================
+                st.markdown("---")
+                st.markdown("### 📑 The 12-Slide 'YES-GENERATING' Proposal")
+                st.caption("Based on *The Blueprint of Approval*. Every field is auto-filled from your profile and discovery call. Edit anything to perfect it.")
+                
+                with st.form("proposal_deck_builder_v3"):
+                    
+                    # ---- SLIDE 1: EXECUTIVE SUMMARY ----
+                    with st.expander("📌 Slide 1: Executive Summary (The One-Page Sell)", expanded=True):
+                        st.info("💡 **Blueprint Tip:** This is NOT about you needing money. Frame it as: *'Here is how we solve your marketing challenge.'* The sponsor should see their ROI before they see your race number.")
+                        
+                        # Auto-generate title from discovery data
+                        ideal = l_notes.get('ideal_outcome', '').strip()
+                        if ideal:
+                            auto_title = f"{r_name} × {l_name}: Driving {ideal.split('.')[0].capitalize()}"
+                        else:
+                            auto_title = f"{r_name} × {l_name}: Strategic Partnership Proposal {datetime.now().year}"
+                        
+                        s1_title = st.text_input("Proposal Title", value=auto_title, help="Lead with THEIR goal, not yours.")
+                        
+                        # Auto-generate summary
+                        if ideal:
+                            auto_summary = f"A strategic marketing partnership designed to deliver {ideal.lower()} through the {r_series} platform. This proposal outlines a measurable, activation-led sponsorship with {r_name} that positions {l_name} in front of {r_spectators}+ engaged fans per event."
+                        else:
+                            auto_summary = f"A commercial partnership opportunity with {r_name} in the {r_series}. This proposal outlines brand exposure, activation opportunities, and measurable returns for {l_name}."
+                        
+                        s1_summary = st.text_area("Executive Summary (3-4 sentences)", value=auto_summary, height=100)
+                        
+                        st.warning("⚡ **Recommendation:** If you learned their ideal outcome in the discovery call, lead with that. Sponsors who see their own goals reflected in the first 10 seconds are 4x more likely to read the full proposal.")
+                    
+                    # ---- SLIDE 2: ATHLETE PROFILE ----
+                    with st.expander("👤 Slide 2: Athlete Profile (Why You?)", expanded=False):
+                        st.info("💡 **Blueprint Tip:** People invest in people. Share your story in a way that creates emotional connection AND demonstrates professionalism.")
+                        
+                        p2_c1, p2_c2 = st.columns(2)
+                        s2_name = p2_c1.text_input("Full Name", value=r_name)
+                        s2_racing_num = p2_c2.text_input("Racing Name / Number", value=f"{r_name} #__")
+                        
+                        p2_c3, p2_c4, p2_c5 = st.columns(3)
+                        s2_age = p2_c3.text_input("Age", placeholder="e.g. 24")
+                        s2_home = p2_c4.text_input("Hometown", value=f"{r_town}, {r_country}" if r_town else "")
+                        s2_cat = p2_c5.text_input("Racing Category", value=r_series)
+                        
+                        s2_story = st.text_area("Your Personal Story (300-500 words)", value=r_bio, height=150, help="This is your chance to build an emotional investment. Share WHY you race, not just WHAT you do.")
+                        s2_mission = st.text_input("Mission Statement", value="To compete at the highest level while delivering exceptional value to commercial partners.", help="Clear, professional, ambitious.")
+                        s2_vision = st.text_area("Long-Term Vision (3-5 years)", value=f"To progress from {r_series} to the next level of professional motorsport.", help="Show them this is a long-term investment, not a one-season deal.")
+                        s2_team = st.text_input("Team & Support Network", value=r_team if r_team else "Team Name — Managed by [Name], Engineered by [Name]")
+                    
+                    # ---- SLIDE 3: PERFORMANCE & VALUE ----
+                    with st.expander("📊 Slide 3: Performance & Value (The Data)", expanded=False):
+                        st.info("📊 **Blueprint Tip:** Lead with DATA. Sponsors want measurable proof of your trajectory and competitiveness. This is where credibility is built.")
+                        
+                        st.markdown("**Current Season Performance**")
+                        p3_c1, p3_c2, p3_c3 = st.columns(3)
+                        p_races = p3_c1.number_input("Races Entered", min_value=0, value=10)
+                        p_wins = p3_c2.number_input("Wins", min_value=0, value=0)
+                        p_podiums = p3_c3.number_input("Podium Finishes", min_value=0, value=0)
+                        
+                        p3_c4, p3_c5, p3_c6 = st.columns(3)
+                        p_top10 = p3_c4.number_input("Top 10 Finishes", min_value=0, value=0)
+                        p_poles = p3_c5.number_input("Pole Positions", min_value=0, value=0)
+                        p_frontrow = p3_c6.number_input("Front Row Starts", min_value=0, value=0)
+                        
+                        p3_c7, p3_c8 = st.columns(2)
+                        p_pos = p3_c7.text_input("Championship Position", value="")
+                        p_points = p3_c8.number_input("Championship Points", min_value=0, value=0)
+                        
+                        # AUTO-CALC
+                        win_rate = (p_wins / p_races * 100) if p_races > 0 else 0
+                        podium_rate = (p_podiums / p_races * 100) if p_races > 0 else 0
+                        top10_rate = (p_top10 / p_races * 100) if p_races > 0 else 0
+                        
+                        st.caption(f"📈 **Auto-Calculated:** Win Rate: {win_rate:.1f}% | Podium Rate: {podium_rate:.1f}% | Top 10: {top10_rate:.1f}%")
+                        
+                        s3_highlights = st.text_area("Career Highlights (Timeline)", value=r_achievements if r_achievements else "2024: [Result]\n2025: [Result]", help="Year-by-year progression shows trajectory.")
+                        s3_goals = st.text_area("2026 Season Goals", value=r_goal if r_goal else "1. Championship Title\n2. Consistent Podiums", help="Ambitious but realistic.")
+                        
+                        s3_metrics = f"Races: {p_races} | Wins: {p_wins} ({win_rate:.0f}%) | Podiums: {p_podiums} ({podium_rate:.0f}%) | Top 10: {p_top10} ({top10_rate:.0f}%) | Poles: {p_poles} | Champ Pos: {p_pos}"
+                        
+                        st.warning("⚡ **Recommendation:** Include qualifying vs race pace if available. Show improvement trajectory year-over-year — even small gains prove momentum.")
+                    
+                    # ---- SLIDE 4: THE PLATFORM ----
+                    with st.expander("🏁 Slide 4: The Platform (Championship Value)", expanded=False):
+                        st.info("💡 **Blueprint Tip:** Sponsors don't sponsor YOU — they sponsor the PLATFORM you stand on. Show the size of the stage.")
+                        
+                        auto_platform = f"{r_series}: {r_competitors} competitors. "
+                        if r_tv:
+                            auto_platform += f"Televised to {r_tv} viewers. "
+                        if r_streamed == "Yes":
+                            auto_platform += "Live-streamed globally. "
+                        auto_platform += f"Average {r_spectators} spectators per event."
+                        
+                        s4_series = st.text_area("Championship Overview", value=auto_platform, height=80)
+                        
+                        p4_c1, p4_c2 = st.columns(2)
+                        s4_rounds = p4_c1.text_input("Number of Rounds", placeholder="e.g. 8 rounds, April-October")
+                        s4_circuits = p4_c2.text_input("Key Venues", placeholder="e.g. Brands Hatch, Silverstone, Donington")
+                        
+                        s4_media = st.text_area("Media & Broadcast Details", value="TV: [Broadcaster]\nStreaming: [Platform]\nSocial Reach: [Combined Followers]", help="Include viewership, countries reached, event attendance.")
+                        
+                        st.warning("⚡ **Recommendation:** Get official figures from the championship organiser — TV audience, social reach, event attendance. Real numbers beat estimates.")
+                    
+                    # ---- SLIDE 5: AUDIENCE ----
+                    with st.expander("👥 Slide 5: Audience & Fan Demographics", expanded=False):
+                        st.info("💡 **Blueprint Tip:** Show EXACTLY who sees the sponsor. Break down by age, gender, income, interests, buying behaviour. No fake metrics. No inflated numbers.")
+                        
+                        auto_audience = f"Total Reach: {r_audience}\n"
+                        auto_audience += "Demographics:\n- Age: 25-55 (70% of audience)\n- Gender: 70% Male / 30% Female\n- Income: Above-average disposable income\n- Interests: Motorsport, automotive, technology, fitness"
+                        
+                        s5_data = st.text_area("Audience Profile & Demographics", value=auto_audience, height=120)
+                        
+                        st.markdown("**Your Digital Reach (Real Numbers Only)**")
+                        p5_c1, p5_c2, p5_c3, p5_c4 = st.columns(4)
+                        s5_insta = p5_c1.text_input("Instagram Followers", placeholder="e.g. 5,200")
+                        s5_fb = p5_c2.text_input("Facebook Followers", placeholder="e.g. 2,100")
+                        s5_yt = p5_c3.text_input("YouTube Subscribers", placeholder="e.g. 800")
+                        s5_tiktok = p5_c4.text_input("TikTok Followers", placeholder="e.g. 1,500")
+                        
+                        s5_engagement = st.text_input("Average Engagement Rate", placeholder="e.g. 4.5% (higher than industry avg of 1.5%)")
+                        
+                        st.warning("⚡ **Recommendation:** Even small followings convert if engagement is high. A 5,000-follower account with 5% engagement beats a 50,000-follower account with 0.3%. Show your authentic engagement rate.")
+                    
+                    # ---- SLIDE 6: BRAND VALUE PROPOSITION ----
+                    st.markdown("---")
+                    st.error("👇 **CRITICAL SECTION: The Commercial Heart of Your Proposal**")
+                    
+                    with st.container(border=True):
+                        st.markdown("#### 💰 Slide 6: Brand Value Proposition (Why This Makes Them Money)")
+                        st.info("💡 **Blueprint Tip:** This is the COMMERCIAL HEART of the proposal. Translate motorsport into business outcomes. Speak the language of 'marketing services', not 'racing'.")
+                        
+                        # Auto-generate from discovery data
+                        auto_benefits = "1. Brand Visibility — Logo on livery seen by thousands per event + digital reach\n"
+                        auto_benefits += "2. B2B Networking — Exclusive paddock access for client hospitality\n"
+                        auto_benefits += "3. Content Rights — Professional photos, videos, behind-the-scenes for your marketing"
+                        
+                        important = l_notes.get('important_elements', '').strip()
+                        customer = l_notes.get('customer_angle', '').strip()
+                        staff = l_notes.get('staff_angle', '').strip()
+                        
+                        if important:
+                            auto_benefits = f"Based on your discovery call, {l_contact or l_name} values:\n- {important}\n\nWe deliver:\n"
+                            auto_benefits += "1. Brand Visibility — Logo placement across all platforms\n"
+                            auto_benefits += "2. Lead Generation — Direct access to engaged audience\n"
+                            auto_benefits += "3. Customer Loyalty — VIP experiences that money can't buy"
+                        if customer:
+                            auto_benefits += f"\n4. Customer Activation — {customer}"
+                        if staff:
+                            auto_benefits += f"\n5. Staff Engagement — {staff}"
+                        
+                        s6_value = st.text_area("What the sponsor GETS (Business Outcomes)", value=auto_benefits, height=150)
+                        
+                        st.warning("⚡ **Recommendation:** Mirror their exact words from the discovery call. If they said 'get in front of new customers', use those exact words — not 'brand awareness'.")
+                    
+                    # ---- SLIDE 7: DELIVERABLES & ACTIVATION ----
+                    with st.container(border=True):
+                        st.markdown("#### 🎯 Slide 7: Deliverables & Activation Plan")
+                        st.info("💡 **Blueprint Tip:** This should feel like a MARKETING CAMPAIGN, not a racing hobby. List specific, measurable deliverables.")
+                        
+                        local_act = l_notes.get('local_activation', '').strip()
+                        
+                        auto_deliverables = f"**Brand Visibility:**\n- {r_vehicle} livery (primary/secondary placement)\n- Race suit & helmet branding\n- Team apparel & garage signage\n\n"
+                        auto_deliverables += "**Media & Content:**\n- Minimum 2x dedicated social posts per event\n- Behind-the-scenes video content\n- Press release mentions & interview features\n- Website logo placement with backlink\n\n"
+                        auto_deliverables += "**Events & Hospitality:**\n- VIP paddock passes (per event)\n- Grid walk access\n- Corporate hospitality days\n- Meet & greet opportunities\n\n"
+                        auto_deliverables += "**Community & PR:**\n- Joint charity / community events\n- Product launch appearances\n- School visit programme\n"
+                        
+                        if local_act:
+                            auto_deliverables += f"\n**Local Activation (from Discovery Call):**\n- {local_act}"
+                        
+                        s7_act = st.text_area("Activation & Deliverables", value=auto_deliverables, height=250)
+                        
+                        st.warning("⚡ **Recommendation:** Be SPECIFIC. Instead of 'social media posts', say '24 dedicated Instagram posts + 12 Reels across the season'. Numbers make it feel tangible and valuable.")
+                    
+                    # ---- SLIDE 8: SUSTAINABILITY & ESG ----
+                    with st.expander("🌱 Slide 8: Sustainability & ESG (Modern Requirement)", expanded=False):
+                        st.info("💡 **Blueprint Tip:** Keep it authentic and minimal. No corporate nonsense. Only list real commitments.")
+                        
+                        s8_esg = st.text_area("ESG & Sustainability Commitments", value="- Carbon-conscious travel planning\n- Youth coaching & mentorship programs\n- Road safety advocacy\n- Community engagement & school visits", height=100)
+                        
+                        st.caption("💡 Even a simple commitment to local community work counts. Don't fabricate ESG credentials.")
+                    
+                    # ---- SLIDE 9: SPONSORSHIP PACKAGES ----
+                    st.markdown("---")
+                    st.error("👇 **CRITICAL SECTION: Make It Easy To Say Yes**")
+                    
+                    with st.container(border=True):
+                        st.markdown("#### 💎 Slide 9: Sponsorship Packages")
+                        st.info("💡 **Blueprint Tip:** Offer 3-4 tiers to anchor the price. The middle tier is your target — most sponsors choose the middle option. Always leave room for custom deals.")
+                        
+                        # Try to price-anchor from budget signals
+                        budget = l_notes.get('budget_signals', '').strip()
+                        budget_hint = ""
+                        if budget:
+                            budget_hint = f"\n\n💰 **Budget Signal from Discovery:** \"{budget}\""
+                        
+                        auto_packages = "**🏆 Platinum Partner** — £XX,000\n"
+                        auto_packages += "- Title naming rights\n- Primary logo on livery\n- Full season hospitality (all rounds)\n- Exclusive content integration\n- Speaking at team events\n\n"
+                        auto_packages += "**🥇 Gold Partner** — £XX,000\n"
+                        auto_packages += "- Major branding placement\n- VIP passes (selected rounds)\n- Regular social content features\n- Press release mentions\n\n"
+                        auto_packages += "**🥈 Silver Partner** — £X,000\n"
+                        auto_packages += "- Logo placement on vehicle\n- Social media features\n- Event day access\n\n"
+                        auto_packages += "**🤝 Support Partner** — £X,000\n"
+                        auto_packages += "- Entry-level exposure\n- Digital presence\n- Recognition on materials"
+                        
+                        s9_tiers = st.text_area("Investment Tiers", value=auto_packages, height=250)
+                        
+                        if budget_hint:
+                            st.info(budget_hint)
+                        
+                        st.warning("⚡ **Recommendation:** Price the middle tier at what you actually want. The top tier makes the middle look reasonable. The bottom tier catches those who want in but have less budget. Always add: 'Custom packages available to match your specific objectives.'")
+                    
+                    # ---- SLIDE 10: ROI & MEDIA VALUE ----
+                    with st.expander("📈 Slide 10: ROI & Media Value", expanded=False):
+                        st.info("💡 **Blueprint Tip:** Justify the spend with QUANTIFIED returns. Show 2:1 to 4:1 return projections. Include: estimated impressions, media value equivalency, hospitality value, and direct sales potential.")
+                        
+                        s10_roi = st.text_area("ROI Breakdown", value="**Estimated Media Value:**\n- Livery exposure per event: £X,000 (based on X hrs broadcast time)\n- Social media reach: X impressions per month\n- Website traffic referral: X visits per annum\n\n**Hospitality Value:**\n- VIP experience market rate: £X per person × X guests = £X,000\n\n**Total Estimated Returns:** £XX,000 (X:1 ratio vs investment)", height=150)
+                        
+                        st.warning("⚡ **Recommendation:** Use the formula: Media Value + Hospitality Value + Content Value + Networking Value > Investment. If returns > 2:1, lead with that number.")
+                    
+                    # ---- SLIDE 11: VISUAL PROOF ----
+                    with st.container(border=True):
+                        st.markdown("#### 🎨 Slide 11: Visual Proof (Mockups)")
+                        st.info("💡 **Blueprint Tip:** Show them what the partnership LOOKS like. A render of their logo on your vehicle is worth 1,000 words. This is where 'maybe' becomes 'yes'.")
+                        
+                        s11_visuals = st.text_area("Describe the mockups/visuals to include", value=f"1. {r_vehicle} livery render in {l_name} brand colors\n2. Race suit with {l_name} logo placement\n3. Social media post mockup featuring {l_name}\n4. Hospitality zone branding concept", height=100)
+                        
+                        st.warning("⚡ **Recommendation:** Even a simple Photoshop mockup of their logo on your vehicle is incredibly powerful. If you uploaded a livery mockup above, Manus will incorporate it into the deck.")
+                    
+                    # ---- SLIDE 12: CLOSING & CALL TO ACTION ----
+                    with st.expander("🤝 Slide 12: Partnership Statement & CTA", expanded=False):
+                        st.info("💡 **Blueprint Tip:** End with a clear, low-pressure call to action. Don't ask them to sign — ask them to DISCUSS. Remove all friction.")
+                        
+                        s12_close = st.text_input("Closing Statement", value=f"Let's build a winning partnership for {datetime.now().year}.")
+                        s12_cta = st.text_area("Call to Action", value=f"I'd welcome a 15-minute call to discuss how we can tailor this to your exact objectives.\n\nNo commitment needed — just a conversation.\n\nContact: {r_name}\nEmail: [Your Email]\nPhone: [Your Phone]", height=100)
+                        
+                        st.warning("⚡ **Recommendation:** The best CTA is: 'Reply with your thoughts — even if it's a no, I'd appreciate the feedback.' This removes pressure and often gets a 'let's talk' reply.")
+                    
+                    # ============================================
+                    # GENERATE
+                    # ============================================
+                    st.markdown("---")
+                    st.markdown("### 🚀 Generate Your Proposal")
+                    
+                    gen_c1, gen_c2 = st.columns(2)
+                    with gen_c1:
+                        include_images_note = "✅ Images uploaded" if (uploaded_logo or uploaded_headshot or uploaded_action or uploaded_mockup) else "⚠️ No images uploaded — deck will use placeholders"
+                        st.caption(include_images_note)
+                    with gen_c2:
+                        st.caption(f"Theme: {deck_theme}")
+                    
+                    if st.form_submit_button("✨ Generate Super-Production Manus Prompt", type="primary"):
+                        
+                        # Build image instructions
+                        image_instructions = ""
+                        if company_logo_url:
+                            image_instructions += f"\n**Company Logo:** Available at URL: {company_logo_url} — use this as the sponsor logo throughout the deck."
+                        if uploaded_logo:
+                            image_instructions += f"\n**Company Logo:** Uploaded file '{uploaded_logo.name}' — use this as the sponsor logo throughout."
+                        if uploaded_headshot:
+                            image_instructions += f"\n**Athlete Headshot:** Uploaded file '{uploaded_headshot.name}' — use on Slide 2 (Athlete Profile)."
+                        if uploaded_action:
+                            image_instructions += f"\n**Action Photo:** Uploaded file '{uploaded_action.name}' — use as hero image on Slide 1 and Slide 3."
+                        if uploaded_mockup:
+                            image_instructions += f"\n**Livery Mockup:** Uploaded file '{uploaded_mockup.name}' — use on Slide 11 (Visual Proof) and optionally Slide 1."
+                        if not image_instructions:
+                            image_instructions = "\n**No images provided.** Create professional placeholder areas where images should be inserted. Use motorsport stock imagery to set the visual tone."
+                        
+                        # Social media reach summary
+                        social_reach = []
+                        if s5_insta: social_reach.append(f"Instagram: {s5_insta}")
+                        if s5_fb: social_reach.append(f"Facebook: {s5_fb}")
+                        if s5_yt: social_reach.append(f"YouTube: {s5_yt}")
+                        if s5_tiktok: social_reach.append(f"TikTok: {s5_tiktok}")
+                        social_str = " | ".join(social_reach) if social_reach else "Growing digital presence"
+                        
+                        # ============================================
+                        # SUPER-PRODUCTION MANUS PROMPT
+                        # ============================================
+                        manus_prompt = f"""You are a world-class presentation designer and motorsport sponsorship strategist. Create an absolutely stunning, investor-grade sponsorship proposal deck.
+
+**PROJECT:** {s1_title}
+**ATHLETE:** {s2_name}
+**SPONSOR TARGET:** {l_name} ({l_sector})
+**CONTACT:** {l_contact}
+
+---
+
+## DESIGN DIRECTION
+
+**Theme:** {deck_theme}
+**Tone:** Premium, commercial, data-driven. This is a BUSINESS PROPOSAL, not a fan page.
+**Style:** Think McKinsey meets Red Bull Racing. Clean typography (use Inter or Montserrat), bold hero images, subtle data visualizations, generous white space. Every slide should feel like it cost £10,000 to design.
+
+**Color Palette:**
+- If "Dark & Premium": Primary #0D0D0D, Accent #C8102E (racing red), Secondary #FAFAFA, Gold accents for premium tier
+- If "Clean White": Primary #FFFFFF, Accent #1A1A2E, Secondary #E8E8E8
+- If "Racing Red": Primary #C8102E, Secondary #1A1A1A, Accent #FFFFFF
+- If "Corporate Blue": Primary #0A2463, Secondary #F5F5F5, Accent #3E92CC
+- If "Custom": Use {l_name}'s brand colors as primary, {s2_name}'s racing colors as accent
+
+**Typography:** Headlines: Bold condensed (Impact/Montserrat Black). Body: Clean sans-serif (Inter/Roboto). Numbers/Stats: Extra-bold for impact.
+
+---
+
+## IMAGES & ASSETS
+{image_instructions}
+
+---
+
+## DISCOVERY CALL INTELLIGENCE (Use this to personalise EVERY slide)
+{disc_context if disc_context else "No discovery data available — create a compelling generic proposal."}
+
+---
+
+## SLIDE-BY-SLIDE STRUCTURE (12 SLIDES)
+
+### SLIDE 1: TITLE / EXECUTIVE SUMMARY
+**Visual:** Full-bleed hero image of the {r_vehicle} in action. Sponsor logo + Athlete name overlaid.
+**Headline:** {s1_title}
+**Body:** {s1_summary}
+**Design Note:** This slide must create an emotional reaction within 3 seconds. Use cinematic composition.
+
+### SLIDE 2: ATHLETE PROFILE
+**Visual:** Professional headshot or portrait. Clean layout.
+**Content:**
+- Name: {s2_name} (Racing as: {s2_racing_num})
+- Age: {s2_age} | Home: {s2_home} | Series: {s2_cat}
+- Story: {s2_story}
+- Mission: {s2_mission}
+- Vision: {s2_vision}
+- Team: {s2_team}
+**Design Note:** Split layout — photo left, bio right. Keep it personal but professional. Include a quote pull-out.
+
+### SLIDE 3: PERFORMANCE & VALUE
+**Visual:** Data visualization / stats dashboard design.
+**Content:**
+- Season Stats: {s3_metrics}
+- Front Row Starts: {p_frontrow}
+- Championship Points: {p_points}
+- Career Highlights: {s3_highlights}
+- 2026 Goals: {s3_goals}
+**Design Note:** Use infographic-style stat cards. Large bold numbers with progress indicators. Show trajectory with an upward trend arrow.
+
+### SLIDE 4: THE PLATFORM (CHAMPIONSHIP)
+**Visual:** Circuit map or championship banner.
+**Content:**
+- Series: {s4_series}
+- Rounds: {s4_rounds}
+- Key Circuits: {s4_circuits}
+- Media Coverage: {s4_media}
+**Design Note:** Include a map showing circuit locations. Show reach visually with concentric circles or heat map overlay.
+
+### SLIDE 5: AUDIENCE & REACH
+**Visual:** Demographics infographic.
+**Content:**
+- Demographics: {s5_data}
+- Digital Reach: {social_str}
+- Engagement Rate: {s5_engagement}
+**Design Note:** Use pie charts for age/gender split. Bar charts for platform reach. Include verified badges next to real numbers. Make this feel data-rich and trustworthy.
+
+### SLIDE 6: BRAND VALUE PROPOSITION ⚡ KEY SLIDE
+**Visual:** Clean layout with bold icons for each benefit.
+**Content:**
+{s6_value}
+**Design Note:** This is the COMMERCIAL HEART. Use a 3-column icon layout. Each benefit gets a bold icon, headline, and 2-line description. Make it feel like a premium menu of options.
+
+### SLIDE 7: ACTIVATION & DELIVERABLES ⚡ KEY SLIDE
+**Visual:** Timeline or calendar-style activation plan.
+**Content:**
+{s7_act}
+**Design Note:** Use a visual timeline showing activation moments across the season. Include mini-icons for each deliverable type. This should feel like a campaign plan, not a wish list.
+
+### SLIDE 8: SUSTAINABILITY & ESG
+**Visual:** Clean, minimal design with leaf/globe icons.
+**Content:**
+{s8_esg}
+**Design Note:** Keep this understated and authentic. One slide, no greenwashing. Simple icons with brief descriptions.
+
+### SLIDE 9: INVESTMENT PACKAGES ⚡ KEY SLIDE
+**Visual:** Tiered pricing table design.
+**Content:**
+{s9_tiers}
+
+Custom packages available — let's build something that fits your exact objectives.
+**Design Note:** Use a pricing table design like a premium SaaS product. Highlight the recommended tier (Gold) with a "MOST POPULAR" or "RECOMMENDED" badge. Include checkmark lists for each tier.
+
+### SLIDE 10: ROI & MEDIA VALUE
+**Visual:** ROI calculator / projection chart.
+**Content:**
+{s10_roi}
+**Design Note:** Use a horizontal bar chart showing: Investment vs Returns. Make the returns bar significantly larger. Include a bold "X:1 ROI" number as the hero stat.
+
+### SLIDE 11: VISUAL PROOF (MOCKUPS)
+**Visual:** Render gallery showing the partnership in action.
+**Content:**
+{s11_visuals}
+**Design Note:** Create a gallery-style layout with 2-4 mockup images. If a livery mockup was provided, make it the hero. Include captions describing each visual.
+
+### SLIDE 12: NEXT STEPS / CTA
+**Visual:** Clean, confident closing design.
+**Closing Statement:** {s12_close}
+**Call to Action:** {s12_cta}
+**Design Note:** Simple, powerful. The closing should feel warm and professional — not desperate. Include contact details prominently with a calendar booking suggestion.
+
+---
+
+## FINAL PRODUCTION NOTES
+1. Export as 16:9 widescreen PDF or PowerPoint
+2. Ensure all text is legible (minimum 14pt body, 24pt headlines)
+3. Include slide numbers subtly in the bottom corner
+4. Add a consistent footer with {s2_name}'s name and {l_name}'s logo
+5. Every slide should work as a standalone image if screenshotted
+6. The deck should take exactly 5-7 minutes to present
+7. Use smooth transitions between slides
+8. Include a subtle watermark or branding element that ties all slides together
+"""
+                        
+                        st.success("✨ Super-Production Prompt Generated!")
+                        
+                        # Display in a copyable box
+                        st.markdown("### 📋 Your Manus Prompt")
+                        st.caption("Copy the entire prompt below and paste it into Manus to generate your professional slide deck.")
+                        st.code(manus_prompt, language=None)
+                        
+                        # Character count
+                        st.caption(f"📊 Prompt Length: {len(manus_prompt):,} characters | ~{len(manus_prompt.split()):,} words")
+                        
+                        st.divider()
+                        
+                        # ACTION BUTTONS
+                        st.markdown("### 📤 Send to Manus")
+                        
+                        act_c1, act_c2, act_c3 = st.columns(3)
+                        with act_c1:
+                            st.link_button("🚀 Open Manus", "https://manus.im/app", type="primary")
+                            st.caption("Paste the prompt above into Manus")
+                        with act_c2:
+                            subject = urllib.parse.quote(f"Proposal Prompt: {s2_name} x {l_name}")
+                            body = urllib.parse.quote("Please paste the prompt from the Sponsor Finder app into Manus to generate the deck.")
+                            mailto = f"mailto:team@caminocoaching.co.uk?subject={subject}&body={body}"
+                            st.link_button("📧 Email Prompt", mailto)
+                            st.caption("Email to your team")
+                        with act_c3:
+                            st.link_button("💬 Open ChatGPT", "https://chat.openai.com")
+                            st.caption("Alternative: use ChatGPT + Canvas")
+                        
+                        # Save prompt to notes
+                        save_notes = lead.get('Notes', {})
+                        if isinstance(save_notes, str):
+                            try: save_notes = json.loads(save_notes)
+                            except: save_notes = {}
+                        if not isinstance(save_notes, dict): save_notes = {}
+                        save_notes['proposal_prompt_generated'] = True
+                        save_notes['proposal_generated_date'] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        db.update_lead_notes(lead['id'], save_notes)
