@@ -233,6 +233,20 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 
                 if relevance_words and not any(word in all_text for word in relevance_words):
                     continue  # Skip irrelevant result
+            
+            # --- NEGATIVE KEYWORD FILTER ---
+            # Exclude businesses that are clearly wrong regardless of search term
+            _NEGATIVE_KEYWORDS = {
+                "TAKEAWAY", "PIZZA", "CHINESE", "INDIAN", "KEBAB", "FISH AND CHIPS",
+                "FOOD DELIVERY", "FAST FOOD", "RESTAURANT", "CAFE", "COFFEE",
+                "CLEANING SERVICE", "NAIL SALON", "HAIR SALON", "BARBER",
+                "DENTIST", "PHARMACY", "OPTICIAN", "VETERINAR",
+                "CHARITY", "CHURCH", "SCHOOL", "NURSERY",
+            }
+            neg_text = f"{name_upper} {cat_upper}"
+            if any(neg in neg_text for neg in _NEGATIVE_KEYWORDS):
+                continue  # Skip obviously irrelevant business
+
 
             # --- EXTRACT DATA FROM OUTSCRAPER SEARCH-V3 ---
             # Fix field names: search-v3 uses 'website' not 'site', 'reviews' may be None

@@ -94,8 +94,8 @@ SECTOR_SEARCH_OPTIMIZATIONS = {
     "Accident management & vehicle services": ["Vehicle repair", "Car body shop", "Accident management", "Garage services"],
     # --- INDUSTRIAL ---
     "Engineering & manufacturing": ["Engineering companies", "Manufacturing plant", "Precision engineering", "Fabrication"],
-    "Transport & haulage": ["Haulage companies", "Logistics companies", "Freight forwarding service"],
-    "Logistics": ["Logistics service", "Freight forwarding", "Warehousing"],
+    "Transport & haulage": ["HGV haulage", "Road haulage contractor", "Truck freight transport"],
+    "Logistics": ["Logistics warehouse", "Freight forwarding company", "Supply chain logistics"],
     "Building supplies & construction": ["Building materials supplier", "Builders merchant", "Timber merchant", "Construction company"],
     # --- HIGH-VALUE NON-ENDEMIC ---
     "Enterprise AI & SaaS": ["Software company", "IT services company", "Technology consulting", "SaaS company"],
