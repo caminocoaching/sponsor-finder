@@ -2208,12 +2208,39 @@ if current_tab == " Search & Add":
         total = len(df_results)
         high_q = len(df_results[df_results.get("Quality", 0) >= 4]) if "Quality" in df_results.columns else 0
         st.caption(f"📊 **{total} results** found • {high_q} high-quality leads (4+⭐)")
+        
+        with st.expander("ℹ️ What do the Quality Score & Reviews mean?"):
+            st.markdown("""
+**⭐ Quality Score (1-5 stars)** tells you how likely this business is to be a good sponsor prospect. Each star = one positive signal:
+
+| Star | What it means |
+|------|---------------|
+| ⭐ | **Has a website** — Can be researched further, shows investment in their brand |
+| ⭐ | **Has a phone number** — Directly contactable, not a shell company |
+| ⭐ | **Within 25 miles** — Local businesses get more ROI from local sponsorship |
+| ⭐ | **5-500 Google reviews** — Right size: not a one-man-band, not a huge chain |
+| ⭐ | **4.0+ Google rating** — Well-run business that cares about reputation |
+
+**A 5-star lead = a nearby, reputable, established business with a strong online presence. Perfect sponsor target.**
+
+---
+
+**📝 Reviews** come from **Google Maps** — it's the total number of customer reviews. Why it matters:
+
+- **0-4 reviews** → Very small/new business, unlikely to have sponsorship budget
+- **5-50 reviews** → Small local business, great for grassroots sponsorship
+- **50-200 reviews** → Established business, good turnover, ideal target
+- **200-500 reviews** → Larger business, likely has marketing budget
+- **500+ reviews** → Probably a national chain — filtered out automatically
+""")
                 
         # --- BUILD DISPLAY COLUMNS ---
         disp_cols = ["In List", "Business Name", "Address"]
         
         if "Score" in df_results.columns:
             disp_cols.append("Score")
+        if "Reviews" in df_results.columns:
+            disp_cols.append("Reviews")
         if "Size" in df_results.columns:
             disp_cols.append("Size")
         if "Distance" in df_results.columns:
@@ -2226,7 +2253,8 @@ if current_tab == " Search & Add":
                 df_results[disp_cols],
                 width="stretch",
                 column_config={
-                    "Score": st.column_config.TextColumn("Quality", width="small", help="A 5-star lead = local business with a website, phone, good reviews, right size. Perfect sponsor candidate."),
+                    "Score": st.column_config.TextColumn("Quality", width="small", help="5-star = website ✓ phone ✓ local ✓ right size ✓ good rating ✓"),
+                    "Reviews": st.column_config.NumberColumn("Reviews", width="small", help="Google Maps review count — indicates business size & reputation"),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
                     "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
                     "In List": st.column_config.TextColumn("Added", width="small"),
