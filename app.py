@@ -222,8 +222,15 @@ def calendar_contact_card(lead_id):
     
     # Load user profile context
     user_data_card = db.get_user_profile(st.session_state.user_id)
-    user_profile_card = user_data_card.get('profile', {})
-    rider_name_card = user_data_card['name']
+    if not user_data_card:
+        qp_email = st.query_params.get("user", "")
+        if qp_email:
+            user_data_card = db.get_user_by_email(qp_email)
+    if not user_data_card:
+        st.error("Could not load user profile.")
+        return
+    user_profile_card = user_data_card.get('profile', {}) or {}
+    rider_name_card = user_data_card.get('name', '')
     town_card = user_profile_card.get('town', '')
     championship_card = user_profile_card.get('championship', 'Unknown')
     
