@@ -101,7 +101,7 @@ def search_apollo_people(api_key, domain):
             fallback_payload = {
                 "q_organization_domains_list": [domain],
                 "page": 1,
-                "per_page": 5
+                "per_page": 10
             }
             fallback_resp = requests.post(search_url, headers=headers, json=fallback_payload)
             if fallback_resp.status_code == 200:
@@ -109,6 +109,33 @@ def search_apollo_people(api_key, domain):
         
         if not people:
             return {"error": "No matching decision makers found."}
+        
+        # Sort people by title seniority (decision-makers first)
+        def title_rank(person):
+            title = (person.get("title") or "").lower()
+            # Higher rank = more senior (we sort descending)
+            if any(t in title for t in ["owner", "managing director", "ceo", "chief executive"]):
+                return 100
+            if any(t in title for t in ["founder", "co-founder"]):
+                return 90
+            if any(t in title for t in ["president", "principal"]):
+                return 80
+            if any(t in title for t in ["vice president", "vp", "chief"]):
+                return 70
+            if "director" in title:
+                return 60
+            if any(t in title for t in ["general manager", "head of"]):
+                return 50
+            if "manager" in title:
+                return 40
+            if "senior" in title:
+                return 30
+            # Low-value titles
+            if any(t in title for t in ["intern", "student", "placement", "assistant", "driver", "operative"]):
+                return 5
+            return 20
+        
+        people = sorted(people, key=title_rank, reverse=True)
         
         # Grab the best match from search
         person = people[0]
