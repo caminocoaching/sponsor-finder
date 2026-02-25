@@ -2185,40 +2185,16 @@ if current_tab == "✉️ Outreach Assistant":
     if not all_leads:
         st.info("No leads found. Go to 'Search & Add' to build your list.")
     else:
-        # Prepare lists — newest leads first (reverse order)
-        reversed_leads = list(reversed(all_leads))
-        lead_names = [l["Business Name"] for l in reversed_leads]
-        lead_ids = [l["id"] for l in reversed_leads]
-        
-        # Determine current index
-        current_idx = 0
-        if st.session_state.selected_lead_id in lead_ids:
-            current_idx = lead_ids.index(st.session_state.selected_lead_id)
-            
-        # UI: Dropdown to switch
-        col_sel1, col_sel2 = st.columns([3, 1])
-        with col_sel1:
-            selected_name = st.selectbox(
-                "Select Company to Manage:", 
-                lead_names, 
-                index=current_idx,
-                key="outreach_lead_picker"
-            )
-        
-        # Update State based on selection
-        # (This logic is implicit because selectbox returns the selected name)
-        # We just need to synchronize the ID
-        selected_lead_row = next((l for l in reversed_leads if l["Business Name"] == selected_name), None)
-        if selected_lead_row and selected_lead_row['id'] != st.session_state.selected_lead_id:
-             st.session_state.selected_lead_id = selected_lead_row["id"]
-             st.rerun()
+        # Auto-select: if no lead selected, pick the most recent one
+        lead_ids = [l["id"] for l in all_leads]
+        if not st.session_state.selected_lead_id or st.session_state.selected_lead_id not in lead_ids:
+            st.session_state.selected_lead_id = all_leads[-1]["id"]  # newest
 
         # 2. MAIN OUTREACH UI
         if st.session_state.selected_lead_id:
             lead = next((l for l in all_leads if l['id'] == st.session_state.selected_lead_id), None)
             
             if lead:
-                st.divider() 
                 # Header Stats
                 h1, h2, h3, h4 = st.columns(4)
                 h1.metric("Status", lead['Status'])
