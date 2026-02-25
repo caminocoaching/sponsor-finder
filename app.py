@@ -2210,395 +2210,280 @@ if current_tab == "✉️ Outreach Assistant":
 
             # --- STAGE 1: CONNECT ---
             if stage == "1. Connect":
-                with col1:
-                    st.subheader("Decision Makers & Research")
+                # Parse lead notes for enriched data
+                lead_notes_data = lead.get('Notes', {})
+                if isinstance(lead_notes_data, str):
+                    try: lead_notes_data = json.loads(lead_notes_data)
+                    except: lead_notes_data = {}
+                if not isinstance(lead_notes_data, dict): lead_notes_data = {}
+                
+                website_url = lead.get('Website', '')
+                domain = ""
+                if website_url:
+                    domain = website_url.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
+                    domain = domain.split("/")[0]
+                
+                contact_name_raw = lead.get('Contact Name', '')
+                clean_contact = contact_name_raw
+                contact_title = ""
+                if "(" in clean_contact:
+                    contact_title = clean_contact[clean_contact.index("(")+1:clean_contact.index(")")].strip() if ")" in clean_contact else ""
+                    clean_contact = clean_contact[:clean_contact.index("(")].strip()
+                
+                has_contact = bool(clean_contact and clean_contact != lead['Business Name'])
+                has_email = bool(lead_notes_data.get('email'))
+                has_linkedin = bool(lead_notes_data.get('contact_url', '').startswith('http'))
+                
+                # ===== STEP 1: INTEL (What Apollo Found) =====
+                st.markdown("### Step 1: Review Intel")
+                
+                if has_contact or has_email:
+                    # Apollo found data — show summary card
+                    intel_cols = st.columns([1, 1])
+                    with intel_cols[0]:
+                        st.markdown(f"**🏢 {lead['Business Name']}**")
+                        if lead.get('Sector'):
+                            st.caption(f"Sector: {lead['Sector']}")
+                        if lead_notes_data.get('industry'):
+                            st.caption(f"Industry: {lead_notes_data['industry']}")
+                        if lead.get('Website'):
+                            st.markdown(f"🌐 [{domain}]({lead['Website']})")
+                        
+                        emp = lead_notes_data.get('employee_count', '')
+                        rev = lead_notes_data.get('revenue', '')
+                        if emp or rev:
+                            size_info = []
+                            if emp: size_info.append(f"{emp} employees")
+                            if rev: size_info.append(f"Revenue: {rev}")
+                            st.caption(" • ".join(size_info))
                     
-                    # PREP: Get Domain for advanced operators
-                    website_url = lead.get('Website', '')
-                    domain = ""
-                    if website_url:
-                        # Simple strip to get domain.com
-                        domain = website_url.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
-                        domain = domain.split("/")[0] # Just the root domain
+                    with intel_cols[1]:
+                        st.markdown(f"**👤 {clean_contact}**")
+                        if contact_title:
+                            st.caption(f"Title: {contact_title}")
+                        if has_email:
+                            st.markdown(f"📧 {lead_notes_data['email']}")
+                        if has_linkedin:
+                            st.markdown(f"🔗 [LinkedIn Profile]({lead_notes_data['contact_url']})")
+                        
+                        company_li = lead_notes_data.get('linkedin_company', '')
+                        if company_li:
+                            st.markdown(f"🏢 [Company LinkedIn]({company_li})")
+                        
+                        # Alternate contacts
+                        alts = lead_notes_data.get('alternates', [])
+                        if alts:
+                            alt_text = ", ".join([f"{a.get('name','')} ({a.get('title','')})" for a in alts[:2]])
+                            st.caption(f"Also found: {alt_text}")
                     
-                    st.info(f"Targeting: **{lead['Business Name']}**" + (f" (`{domain}`)" if domain else ""))
+                    st.success("✅ Apollo found your decision-maker. Ready to connect!")
+                else:
+                    st.warning("⚠️ Apollo couldn't find a contact for this company. Use the research tools below to find one manually.")
+                
+                st.divider()
+                
+                # ===== STEP 2: THE MESSAGE =====
+                st.markdown("### Step 2: Copy & Send Message")
+                
+                # Contact details (editable)
+                edit_c1, edit_c2, edit_c3 = st.columns([2, 1, 2])
+                with edit_c1:
+                    new_name = st.text_input("Contact Name", value=contact_name_raw, key=f"contact_name_input_{lead['id']}")
+                with edit_c2:
+                    saved_salutation = lead_notes_data.get('salutation', 'Mr')
+                    sal_options = ["Mr", "Mrs", "Miss", "Ms", "Dr"]
+                    sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
+                    contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
+                with edit_c3:
+                    saved_url = lead_notes_data.get('contact_url', '')
+                    contact_url = st.text_input("LinkedIn URL", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
+                
+                # Save contact changes
+                if new_name != contact_name_raw or contact_url != saved_url:
+                    if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
+                        if new_name:
+                            db.update_lead_contact(lead['id'], new_name)
+                            save_notes = lead_notes_data.copy()
+                            save_notes['salutation'] = contact_salutation
+                            save_notes['contact_url'] = contact_url
+                            db.update_lead_notes(lead['id'], save_notes)
+                            st.toast(f"✅ Saved: {contact_salutation} {new_name}")
+                            time.sleep(0.5)
+                            st.rerun()
+                
+                # Open Profile button
+                if has_linkedin:
+                    st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({lead_notes_data['contact_url']})**")
+                
+                st.divider()
+                
+                # Message template
+                contact_name_for_msg = new_name if new_name else ""
+                town = saved_town
+                
+                seq_options = [
+                    "LI Connect: Request",
+                    "Email: Cold Opener",
+                    "LI Msg 1: Intro (Day 2)",
+                    "LI Msg 2: Homework (Day 7)",
+                    "LI Msg 3: Momentum (Day 14)",
+                    "LI Msg 4: Scarcity (Day 21)",
+                    "LI Msg 5: Final (Day 28)"
+                ]
+                
+                # Auto-select next step
+                last_sent_step = lead_notes_data.get('outreach_step', -1)
+                try: last_sent_step = int(last_sent_step)
+                except: last_sent_step = -1
+                auto_tpl_idx = min(last_sent_step + 1, len(seq_options) - 1)
+                if auto_tpl_idx < 0: auto_tpl_idx = 0
+                
+                c_mode = st.radio("Mode", ["Draft Opener", "Handle Reply"], horizontal=True, key=f"mode_{lead['id']}")
+                
+                if c_mode == "Draft Opener":
+                    tpl = st.selectbox("Template", seq_options, index=auto_tpl_idx)
                     
-                    # --- HELPER ---
+                    ctx = {
+                        "goal": season_goal, "prev_champ": prev_champ, "achievements": achievements,
+                        "audience": audience_size, "tv": tv_viewers, "team": team_name,
+                        "rep_mode": user_profile.get("rep_mode", False),
+                        "rep_name": user_profile.get("rep_name", ""),
+                        "rep_role": user_profile.get("rep_role", "")
+                    }
+                    
+                    draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx, contact_name=contact_name_for_msg, salutation=contact_salutation)
+                    
+                    final_msg = st.text_area("Edit Message:", value=draft, height=200)
+                    
+                    st.caption("👇 Click the Copy icon in the top right of the box below")
+                    st.code(final_msg, language=None)
+                    
+                    # ===== STEP 3: SEND & SCHEDULE =====
+                    st.markdown("### Step 3: Mark as Sent")
+                    
+                    col_d1, col_d2 = st.columns([2, 1])
+                    with col_d1:
+                        def_days = 2
+                        if "Connect" in tpl: def_days = 2
+                        elif "Msg 1" in tpl: def_days = 5
+                        elif "Msg 2" in tpl: def_days = 7
+                        elif "Msg 3" in tpl: def_days = 7
+                        elif "Msg 4" in tpl: def_days = 7
+                        elif "Msg 5" in tpl: def_days = 30
+                        
+                        auto_date = datetime.now() + timedelta(days=def_days)
+                        auto_str = auto_date.strftime("%Y-%m-%d")
+                        
+                        use_manual = st.checkbox("Change Date (Manual)?", value=False)
+                        if use_manual:
+                            final_date_obj = st.date_input("Select Custom Date", value=auto_date)
+                            final_date = final_date_obj.strftime("%Y-%m-%d")
+                        else:
+                            st.info(f"📅 Auto-Schedule: **{auto_str}** (+{def_days} days)")
+                            final_date = auto_str
+                    
+                    with col_d2:
+                        st.write("")
+                        st.write("")
+                        if st.button("✅ Mark as Sent & Schedule", use_container_width=True):
+                            st.balloons()
+                            db.update_lead_status(lead['id'], "Active", final_date)
+                            
+                            current_step_idx = seq_options.index(tpl) if tpl in seq_options else 0
+                            mark_notes = lead_notes_data.copy()
+                            mark_notes['outreach_step'] = current_step_idx
+                            mark_notes['last_template'] = tpl
+                            mark_notes['salutation'] = contact_salutation
+                            if contact_url:
+                                mark_notes['contact_url'] = contact_url
+                            db.update_lead_notes(lead['id'], mark_notes)
+                            
+                            st.success(f"🎉 Done! Next follow-up: {final_date}")
+                            time.sleep(3)
+                            st.rerun()
+                
+                else:
+                    # Handle Reply mode
+                    st.subheader("Coach Mode")
+                    reply = st.text_input("Paste Reply:")
+                    
+                    # Default keys
+                    detected_key = "fallback"
+                    
+                    if reply:
+                        detected_key = handle_objection(reply)
+                        st.caption(f"Detected Intent: {detected_key.title()}")
+                        
+                    # Manual Override
+                    options = list(OBJECTION_SCRIPTS.keys()) + ["fallback"]
+                    
+                    # Handle fallback text logic
+                    fallback_text = "I see. Could you clarify if the hesitation is around timing or the concept itself? (Generic fallback)"
+                    
+                    # Try to find index of detected key
+                    try:
+                        idx = options.index(detected_key)
+                    except:
+                        idx = len(options) - 1
+                        
+                    selected_type = st.selectbox("Response Strategy", options, index=idx)
+                    
+                    # Get content
+                    if selected_type == "fallback":
+                        final_script = fallback_text
+                    else:
+                        final_script = OBJECTION_SCRIPTS.get(selected_type, fallback_text)
+                        
+                    st.info("✏️ Edit your reply below, then copy:")
+                    edited_reply = st.text_area("Edit Reply:", value=final_script, height=150, key=f"reply_edit_{lead['id']}")
+                    st.caption("👇 Copy from here:")
+                    st.code(edited_reply, language=None)
+                    
+                    st.divider()
+                    st.subheader("📅 Manual Reschedule")
+                    st.caption("If they are busy, on holiday, or ask for a specific date:")
+                    
+                    col_r1, col_r2 = st.columns([2, 1])
+                    manual_date = col_r1.date_input("Select Next Action Date", value=datetime.now() + timedelta(days=7))
+                    
+                    if col_r2.button("Update Schedule"):
+                        m_date_str = manual_date.strftime("%Y-%m-%d")
+                        db.update_lead_status(lead['id'], "Active", m_date_str)
+                        st.success(f"Rescheduled for {m_date_str}!")
+                        time.sleep(1)
+                        st.rerun()
+                
+                # --- COLLAPSED MANUAL RESEARCH (fallback if Apollo didn't find contact) ---
+                st.divider()
+                expand_research = not has_contact  # Auto-expand if no contact found
+                with st.expander("🔍 Manual Research Tools (if needed)", expanded=expand_research):
+                    st.caption("Use these if Apollo didn't find the decision-maker, or you want to verify.")
+                    
                     def google_link(query, label):
                         url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
                         st.markdown(f"• [{label}]({url})")
-
-                    # PILLAR 0: OPEN CORPORATES (NEW)
-                    st.markdown("### 0️⃣ Corporate Registry (Director Search)")
-                    with st.expander("🏛️ OpenCorporates Search", expanded=True):
-                         st.caption("Find official directors/officers to target.")
-                         
-                         oc_url = f"https://opencorporates.com/companies?q={urllib.parse.quote_plus(lead['Business Name'])}"
-                         st.markdown(f"**Step 1:** [Search '{lead['Business Name']}' on OpenCorporates]({oc_url})")
-                         
-                         st.markdown("**Step 2:** Copy found Director names below:")
-                         found_directors = st.text_area("Director Names (one per line)", key="director_input", help="Paste names here to generate search links.", height=100)
-                         
-                         if found_directors:
-                             st.markdown("**Step 3:** Deep Dive Targets")
-                             # Location Logic for FB
-                             addr = lead.get("Address", "")
-                             location_term = ""
-                             if addr:
-                                 # Try to grab the city (simple heuristic: 2nd element if comma sep, else whole)
-                                 parts = addr.split(',')
-                                 if len(parts) > 1:
-                                     location_term = parts[1].strip()
-                                 else:
-                                     location_term = addr
-
-                             names = [n.strip() for n in found_directors.split('\n') if n.strip()]
-                             for i, name in enumerate(names):
-                                 # Clean Name (First + Last only, remove titles/commas)
-                                 # Logic: "Mr. David James Smith" -> "David Smith"
-                                 # Logic: "SMITH, David James" -> "David Smith" (Heuristic fit)
-                                 
-                                 clean_s = name.replace(",", " ").replace(".", "")
-                                 parts = clean_s.split()
-                                 
-                                 # Strip titles
-                                 titles = {"mr", "mrs", "ms", "miss", "dr", "prof", "sir"}
-                                 if parts and parts[0].lower() in titles:
-                                     parts.pop(0)
-
-                                 if len(parts) >= 2:
-                                     # Case: "David James Smith" -> David Smith
-                                     cleaned_name = f"{parts[0].title()} {parts[-1].title()}"
-                                     display_name = f"{cleaned_name}"
-                                 elif parts:
-                                     cleaned_name = parts[0].title()
-                                     display_name = cleaned_name
-                                 else:
-                                     cleaned_name = name
-                                     display_name = name
-
-                                 c1, c2 = st.columns([3, 1])
-                                 with c1:
-                                     st.markdown(f"__🔎 {display_name}__")
-                                     
-                                     # LinkedIn: Use Cleaned Name
-                                     google_link(f'site:linkedin.com/in "{cleaned_name}" "{lead["Business Name"]}"', f"LinkedIn Xray")
-                                     
-                                     # FB: Cleaned Name + Location
-                                     fb_query = f"{cleaned_name} {location_term}"
-                                     fb_url = f"https://www.facebook.com/search/people/?q={urllib.parse.quote_plus(fb_query)}"
-                                     st.markdown(f"• [Facebook Search ({location_term})]({fb_url})")
-                                 
-                                 with c2:
-                                     # check if this is already the saved contact
-                                     is_saved = lead.get("Contact Name") == cleaned_name
-                                     if is_saved:
-                                         st.success("✅ Primary")
-                                     else:
-                                         # Save the CLEANED name
-                                         if st.button("Set Primary", key=f"save_{lead['id']}_{i}"):
-                                             db.update_lead_contact(lead['id'], cleaned_name)
-                                             st.toast(f"Updated Contact to: {cleaned_name}")
-                                             time.sleep(0.5)
-                                             st.rerun()
-                                 st.divider()
-
-                    # PILLAR 1: WEB DEEP DIVE (FACT FINDING)
-                    st.markdown("### 1️⃣ Web Deep Dive (Fact Finding)")
-                    with st.expander("🌍 Web Intelligence", expanded=True):
-                        # Helper hoisted above
-
-                        if domain:
-                            st.caption(f"Searching domain: `{domain}`")
-                            # Simplified Stacks
-                            google_link(f'{lead["Business Name"]}', "Google Search (General)")
-                            google_link(f'{lead["Business Name"]} (news OR "new site" OR expansion OR opening)', "News & Expansion")
-                            google_link(f'{lead["Business Name"]} sponsorship', "Sponsorship Check")
-                            
-                            # Advanced Signals
-                            google_link(f'intitle:"{lead["Business Name"]}" "merger" OR "launch" OR "lawsuit"', "High Impact Headlines")
-                            google_link(f'"{lead["Business Name"]}" after:2025-01-01', "Latest News (Last 12mo)")
-                            google_link(f'"{lead["Business Name"]}" -site:{domain}', "External Press Only")
-                        else:
-                            google_link(f'{lead["Business Name"]} official site', "Find Website First")
                     
+                    r_c1, r_c2 = st.columns(2)
+                    with r_c1:
+                        st.markdown("**🏛️ Company Registry**")
+                        oc_url = f"https://opencorporates.com/companies?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"[Search OpenCorporates]({oc_url})")
+                        
+                        st.markdown("**👔 LinkedIn**")
+                        google_link(f'site:linkedin.com/company "{lead["Business Name"]}"', "Company Page")
+                        google_link(f'site:linkedin.com/in "{lead["Business Name"]}"', "All Employees")
+                        if clean_contact and has_contact:
+                            google_link(f'site:linkedin.com/in "{clean_contact}" "{lead["Business Name"]}"', f"Verify {clean_contact}")
                     
-                    # PILLAR 2: LINKEDIN PEOPLE SEARCH
-                    st.markdown("### 2️⃣ LinkedIn (People Search)")
-                    with st.expander("👔 LinkedIn Deep Search", expanded=True):
-                        st.caption("Find the decision makers directly.")
-                        # 1. Company Page
-                        google_link(f'site:linkedin.com/company "{lead["Business Name"]}"', "Official Company Page")
+                    with r_c2:
+                        st.markdown("**🌍 Web Search**")
+                        google_link(f'{lead["Business Name"]}', "Google Search")
+                        google_link(f'{lead["Business Name"]} sponsorship', "Sponsorship Check")
+                        google_link(f'"{lead["Business Name"]}" after:2025-01-01', "Latest News")
                         
-                        # 2. X-Ray Search (All Employees)
-                        google_link(f'site:linkedin.com/in "{lead["Business Name"]}"', "All Employees (X-Ray Search)")
-
-
-                        
-                        # Verify Name
-                        if lead.get('Contact Name'):
-                            verify_name = lead['Contact Name']
-                            if "(" in verify_name:
-                                verify_name = verify_name[:verify_name.index("(")].strip()
-                            st.markdown("**Verify Contact:**")
-                            google_link(f'site:linkedin.com/in "{verify_name}" "{lead["Business Name"]}"', f"Verify '{verify_name}'")
-                            
-
-                    # PILLAR 3: FACEBOOK SEARCH & FINDER MODULE
-                    st.markdown("### 3️⃣ Facebook (Founder Finder)")
-                    with st.expander("👤 Facebook Founder Finder (Beta)", expanded=True):
-                        st.caption("Use this if you can't find a contact elsewhere. Target owners of local businesses.")
-                        
-                        # A) Standard Search Links
-                        st.markdown("**Manual Search:**")
-                        google_link(f'site:facebook.com "{lead["Business Name"]}"', "Company Facebook Page")
-                        google_link(f'site:facebook.com "{lead["Business Name"]}" "owner" OR "director"', "Find People associated with Company")
-                        
-                        st.divider()
-                        
-
-
-
-
-
-
-                    
-                    st.divider()
-                    
-                    # 4. AI Deep Research Prompt
-                    with st.expander("🤖 AI Deep Research Prompt (for ChatGPT/Perplexity)", expanded=False):
-                        st.caption("Copy this prompt and paste it into ChatGPT, Claude, or Perplexity for a full dossier.")
-                        
-                        ai_prompt = f"""Act as an elite motorsport-sponsorship acquisition analyst.  
-Produce a 2-minute brief for “{lead['Business Name']}” ({lead.get('Sector', 'Unknown')} sector) with:
-1. Corporate overview & revenue band
-2. Any motorsport / automotive sponsorship history (last 5 yrs)
-3. News & financial milestones (last 12 months)
-4. Three verified decision-makers (Name – Role – LinkedIn URL)
-5. Verified email pattern + main phone number
-6. 3-sentence sponsorship angle tailored to {rider_name} ({championship}).
-
-Supply a source URL for every data point. Do not guess emails."""
-                        
-                        st.code(ai_prompt, language=None)
-
-
-                    
-                    st.divider()
-                    
-
-                    
-
-
-                with col2:
-                    # Top Controls: Action Mode + Contact Details
-                    top_c1, top_c2 = st.columns([1.2, 1])
-                    with top_c1:
-                         c_mode = st.radio("Action Mode", ["Draft Opener", "Handle Reply"], horizontal=True)
-                    with top_c2:
-                         # [UPDATE] Auto-populate with latest DB value if available
-                         current_contact = lead.get('Contact Name', '')
-                         new_name = st.text_input("Found Contact Name", value=current_contact, key=f"contact_name_input_{lead['id']}")
-                    
-                    # Contact Details Row: Salutation + Profile URL
-                    detail_c1, detail_c2 = st.columns([1, 2])
-                    with detail_c1:
-                         # Salutation selector (persisted in notes)
-                         lead_notes_sal = lead.get('Notes', {})
-                         if isinstance(lead_notes_sal, str):
-                             try: lead_notes_sal = json.loads(lead_notes_sal)
-                             except: lead_notes_sal = {}
-                         saved_salutation = lead_notes_sal.get('salutation', 'Mr') if isinstance(lead_notes_sal, dict) else 'Mr'
-                         sal_options = ["Mr", "Mrs", "Miss", "Ms", "Dr"]
-                         sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
-                         contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
-                    with detail_c2:
-                         # Contact Profile URL (LinkedIn, Facebook, etc.)
-                         saved_url = lead_notes_sal.get('contact_url', '') if isinstance(lead_notes_sal, dict) else ''
-                         contact_url = st.text_input("Profile URL (LinkedIn/Facebook)", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
-                    
-                    # Save button for all contact details
-                    if st.button("Update Contact", key=f"btn_update_contact_{lead['id']}"):
-                         if new_name:
-                             db.update_lead_contact(lead['id'], new_name)
-                             # Also save salutation and URL in notes
-                             save_notes = lead.get('Notes', {})
-                             if isinstance(save_notes, str):
-                                 try: save_notes = json.loads(save_notes)
-                                 except: save_notes = {}
-                             if not isinstance(save_notes, dict): save_notes = {}
-                             save_notes['salutation'] = contact_salutation
-                             save_notes['contact_url'] = contact_url
-                             db.update_lead_notes(lead['id'], save_notes)
-                             st.toast(f"✅ Contact updated: {contact_salutation} {new_name}")
-                             time.sleep(0.5)
-                             st.rerun()
-                         else:
-                             st.warning("Please enter a contact name first.")
-                    
-                    if c_mode == "Draft Opener":
-                        st.subheader("Outreach Message")
-                        contact_name_raw = new_name if new_name else ""
-                        
-                        # Use saved town from profile
-                        town = saved_town 
-                        
-                        seq_options = [
-                            "LI Connect: Request",
-                            "Email: Cold Opener",
-                            "LI Msg 1: Intro (Day 2)",
-                            "LI Msg 2: Homework (Day 7)",
-                            "LI Msg 3: Momentum (Day 14)",
-                            "LI Msg 4: Scarcity (Day 21)",
-                            "LI Msg 5: Final (Day 28)"
-                        ]
-                        
-                        # Auto-select to the next step based on last sent
-                        lead_notes = lead.get('Notes', {})
-                        if isinstance(lead_notes, str):
-                            try:
-                                lead_notes = json.loads(lead_notes)
-                            except:
-                                lead_notes = {}
-                        last_sent_step = lead_notes.get('outreach_step', -1) if isinstance(lead_notes, dict) else -1
-                        try:
-                            last_sent_step = int(last_sent_step)
-                        except:
-                            last_sent_step = -1
-                        auto_tpl_idx = min(last_sent_step + 1, len(seq_options) - 1)
-                        if auto_tpl_idx < 0:
-                            auto_tpl_idx = 0
-                        
-                        tpl = st.selectbox("Template", seq_options, index=auto_tpl_idx)
-                        
-                        # Context from Sidebar/DB
-                        ctx = {
-                            "goal": season_goal,
-                            "prev_champ": prev_champ,
-                            "achievements": achievements,
-                            "audience": audience_size,
-                            "tv": tv_viewers,
-                            "team": team_name,
-                            "rep_mode": user_profile.get("rep_mode", False),
-                            "rep_name": user_profile.get("rep_name", ""),
-                            "rep_role": user_profile.get("rep_role", "")
-                        }
-                        
-                        # Generate message with automatic name formatting
-                        # Initial messages use Mr/Mrs LastName, follow-ups use first name
-                        draft = generate_message(tpl, lead['Business Name'], rider_name, lead['Sector'], town=town, championship=championship, extra_context=ctx, contact_name=contact_name_raw, salutation=contact_salutation)
-                        
-                        final_msg = st.text_area("Edit Message:", value=draft, height=250)
-                        
-                        st.caption("👇 Click the Copy icon in the top right of the box below")
-                        st.code(final_msg, language=None)
-                        
-                        # MANUAL DATE OVERRIDE
-                        col_d1, col_d2 = st.columns([2, 1])
-                        with col_d1:
-                            # 1. Calculate Standard Timing (Training Doc)
-                            def_days = 2
-                            if "Connect" in tpl: def_days = 2
-                            elif "Msg 1" in tpl: def_days = 5
-                            elif "Msg 2" in tpl: def_days = 7
-                            elif "Msg 3" in tpl: def_days = 7
-                            elif "Msg 4" in tpl: def_days = 7
-                            elif "Msg 5" in tpl: def_days = 30
-                            
-                            auto_date = datetime.now() + timedelta(days=def_days)
-                            auto_str = auto_date.strftime("%Y-%m-%d")
-                            
-                            # UI: Show Auto, allow Manual
-                            use_manual = st.checkbox("Change Date (Manual)?", value=False)
-                            
-                            if use_manual:
-                                final_date_obj = st.date_input("Select Custom Date", value=auto_date)
-                                final_date = final_date_obj.strftime("%Y-%m-%d")
-                            else:
-                                st.info(f"📅 Auto-Schedule: **{auto_str}** (+{def_days} days)")
-                                final_date = auto_str
-                        
-                        with col_d2:
-                            st.write("") # Spacer
-                            st.write("") 
-                            if st.button("Mark as Sent & Schedule"):
-                                # 🎈 Fire balloons FIRST so the animation starts immediately
-                                st.balloons()
-                                
-                                # 2. Update DB using decided date
-                                db.update_lead_status(lead['id'], "Active", final_date)
-                                
-                                # 3. Track which step was sent in notes
-                                current_step_idx = seq_options.index(tpl) if tpl in seq_options else 0
-                                mark_notes = lead.get('Notes', {})
-                                if isinstance(mark_notes, str):
-                                    try:
-                                        mark_notes = json.loads(mark_notes)
-                                    except:
-                                        mark_notes = {}
-                                if not isinstance(mark_notes, dict):
-                                    mark_notes = {}
-                                mark_notes['outreach_step'] = current_step_idx
-                                mark_notes['last_template'] = tpl
-                                # Persist salutation and contact URL
-                                mark_notes['salutation'] = contact_salutation
-                                if contact_url:
-                                    mark_notes['contact_url'] = contact_url
-                                db.update_lead_notes(lead['id'], mark_notes)
-                            
-                                st.success(f"🎉 Message Logged! 📅 Next follow-up on {final_date}.")
-                                time.sleep(3)
-                                st.rerun()
-                    
-                    else:
-                        st.subheader("Coach Mode")
-                        reply = st.text_input("Paste Reply:")
-                        
-                        # Default keys
-                        detected_key = "fallback"
-                        
-                        if reply:
-                            detected_key = handle_objection(reply)
-                            st.caption(f"Detected Intent: {detected_key.title()}")
-                            
-                        # Manual Override
-                        options = list(OBJECTION_SCRIPTS.keys()) + ["fallback"]
-                        
-                        # Handle fallback text logic
-                        fallback_text = "I see. Could you clarify if the hesitation is around timing or the concept itself? (Generic fallback)"
-                        
-                        # Try to find index of detected key
-                        try:
-                            idx = options.index(detected_key)
-                        except:
-                            idx = len(options) - 1
-                            
-                        selected_type = st.selectbox("Response Strategy", options, index=idx)
-                        
-                        # Get content
-                        if selected_type == "fallback":
-                            final_script = fallback_text
-                        else:
-                            final_script = OBJECTION_SCRIPTS.get(selected_type, fallback_text)
-                            
-                        st.info("✏️ Edit your reply below, then copy:")
-                        edited_reply = st.text_area("Edit Reply:", value=final_script, height=150, key=f"reply_edit_{lead['id']}")
-                        st.caption("👇 Copy from here:")
-                        st.code(edited_reply, language=None)
-                        
-                        st.divider()
-                        st.subheader("📅 Manual Reschedule")
-                        st.caption("If they are busy, on holiday, or ask for a specific date:")
-                        
-                        col_r1, col_r2 = st.columns([2, 1])
-                        manual_date = col_r1.date_input("Select Next Action Date", value=datetime.now() + timedelta(days=7))
-                        
-                        if col_r2.button("Update Schedule"):
-                             m_date_str = manual_date.strftime("%Y-%m-%d")
-                             db.update_lead_status(lead['id'], "Active", m_date_str)
-                             st.success(f"Rescheduled for {m_date_str}!")
-                             time.sleep(1)
-                             st.rerun()
+                        st.markdown("**👤 Facebook**")
+                        google_link(f'site:facebook.com "{lead["Business Name"]}"', "Company Page")
+                        google_link(f'site:facebook.com "{lead["Business Name"]}" "owner" OR "director"', "Find Owner")
 
             # --- STAGE 2: DISCOVERY CALL ---
             elif stage == "2. Discovery Call":
