@@ -290,11 +290,19 @@ def calendar_contact_card(lead_id):
         if lead.get('Next Action'):
             st.caption(f"📅 Follow-up: {lead.get('Next Action', '')}")
     
-    # --- PROFILE URL ---
+    contact_email = lead_notes.get('email', '')
+    
+    # --- PROFILE URL & EMAIL ---
+    link_parts = []
+    if contact_email:
+        link_parts.append(f"📧 [{contact_email}](mailto:{contact_email})")
     if contact_url:
-        st.markdown(f"🔗 **[Open Profile → Message Now]({contact_url})**")
+        link_parts.append(f"🔗 [Open Profile → Message Now]({contact_url})")
+    
+    if link_parts:
+        st.markdown("  •  ".join(link_parts))
     else:
-        st.caption("⚠️ No profile URL saved — add one in the Outreach Assistant")
+        st.caption("⚠️ No email or profile URL saved — add one in the Outreach Assistant")
     
     st.divider()
     
