@@ -1437,13 +1437,27 @@ if current_tab == "📊 Active Campaign":
                     else:
                         next_msg_label = "Opener"
                     
-                    # Show full contact name + company + sequence step
+                    # Show contact name + company + stage
                     contact_display = (row.get('Contact Name', '') or '').strip()
                     company = row['Business Name']
-                    if contact_display:
-                        cal_title = f"{contact_display} — {company} → {next_msg_label}"
+                    
+                    # Determine stage label based on status
+                    status = row.get('Status', 'Pipeline')
+                    if status in ('Pipeline', 'Active'):
+                        stage_label = f"Connect: {next_msg_label}"
+                    elif status == 'Call Booked':
+                        stage_label = "Discovery Call"
+                    elif status == 'Proposal':
+                        stage_label = "Proposal"
+                    elif status == 'Secured':
+                        stage_label = "✅ Secured"
                     else:
-                        cal_title = f"{company} → {next_msg_label}"
+                        stage_label = next_msg_label
+                    
+                    if contact_display:
+                        cal_title = f"{contact_display} | {company} | {stage_label}"
+                    else:
+                        cal_title = f"{company} | {stage_label}"
                     
                     # Extract contact URL from notes if available
                     event_notes = row.get('Notes', {})
@@ -1464,9 +1478,9 @@ if current_tab == "📊 Active Campaign":
                 "headerToolbar": {
                     "left": "today prev,next",
                     "center": "title",
-                    "right": "dayGridMonth,timeGridWeek,timeGridDay"
+                    "right": "dayGridMonth,timeGridWeek,listWeek"
                 },
-                "initialView": "dayGridMonth",
+                "initialView": "timeGridWeek",
                 "initialDate": datetime.now().strftime("%Y-%m-%d"),
                 "navLinks": True,
             }
