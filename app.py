@@ -965,13 +965,18 @@ else:
 # Load User
 user_data = db.get_user_profile(st.session_state.user_id)
 if not user_data:
-    # First-time user or missing profile — create it
-    db.save_user_profile(st.session_state.user_id, st.session_state.user_id, {})
-    user_data = db.get_user_profile(st.session_state.user_id)
+    # Fallback: try looking up by email from query params
+    qp_email = st.query_params.get("user", "")
+    if qp_email:
+        user_data = db.get_user_by_email(qp_email)
+        if user_data:
+            st.session_state.user_id = user_data['id']
 
 if not user_data:
-    st.error("Could not load user profile. Please refresh the page.")
-    st.stop()
+    # Still nothing — force back to login
+    st.session_state.user_id = None
+    st.query_params.clear()
+    st.rerun()
 
 user_profile = user_data.get('profile', {}) or {}
 
