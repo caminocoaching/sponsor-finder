@@ -102,8 +102,7 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             "skip": skip,
             "language": "en",
             "region": region_code,
-            "async": "false",
-            "domains_service": "true"  # Enrichment: scrapes websites for emails & social media links
+            "async": "false"
         }
         
         response = client._request('GET', '/maps/search-v3', params=params)
@@ -211,41 +210,78 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 skipped_chain += 1
                 continue
 
-            # --- EXTRACT ENRICHED DATA FROM OUTSCRAPER ---
-            reviews_count = item.get("reviews", item.get("reviews_count", 0))
-            try:
-                reviews_count = int(reviews_count) if reviews_count else 0
-            except:
+            # --- EXTRACT DATA FROM OUTSCRAPER SEARCH-V3 ---
+            # Fix field names: search-v3 uses 'website' not 'site', 'reviews' may be None
+            reviews_per = item.get("reviews_per_score") or {}
+            if isinstance(reviews_per, dict):
+                reviews_count = sum(int(v or 0) for v in reviews_per.values())
+            else:
                 reviews_count = 0
+            raw_reviews = item.get("reviews")
+            if raw_reviews is not None:
+                try:
+                    reviews_count = int(raw_reviews)
+                except:
+                    pass
             
-            website = item.get("site", "")
-            phone = item.get("phone", "")
-            description = item.get("description", item.get("about", ""))
-            owner = item.get("owner_title", item.get("owner", ""))
+            website = item.get("website", item.get("site", "")) or ""
+            phone = item.get("phone", "") or ""
             
-            # Social media links (enriched via domains_service)
+            # Description: 'about' is a dict of features, 'description' is text
+            description = item.get("description") or ""
+            if not description:
+                about = item.get("about")
+                if isinstance(about, dict):
+                    # Extract readable features
+                    parts = []
+                    for cat, features in about.items():
+                        if isinstance(features, dict):
+                            enabled = [k for k, v in features.items() if v]
+                            if enabled:
+                                parts.append(f"{cat}: {', '.join(enabled)}")
+                    description = "; ".join(parts) if parts else ""
+                    
+            owner = item.get("owner_title", "") or ""
+            
+            # Sector: 'category' often null, use 'type' or 'subtypes'
+            sector_val = item.get("category") or item.get("type") or item.get("subtypes") or "Search Result"
+            
+            # --- Inline extraction (no extra API call — enrichment happens on "Add to Leads") ---
             social_links = {}
+            emails = []
+            
+            # Some Outscraper results may include these if the plan supports it
             for social_key in ["facebook", "instagram", "twitter", "linkedin", "youtube"]:
                 val = item.get(social_key, "")
                 if val:
                     social_links[social_key] = val
-
-            # Email addresses (enriched via domains_service)
-            emails = []
             for email_key in ["email_1", "email_2", "email_3", "email"]:
                 val = item.get(email_key, "")
                 if val and val not in emails:
                     emails.append(val)
             
-            # --- COMPANY SIZE ESTIMATION (from review count) ---
-            if reviews_count > 500:
-                size_estimate = "Large"
+            # --- COMPANY SIZE ESTIMATION ---
+            # Use employees count if available, otherwise estimate from reviews
+            employees = item.get("employees")
+            if employees and isinstance(employees, (int, str)):
+                try:
+                    emp_count = int(str(employees).replace("+", "").replace(",", ""))
+                    if emp_count > 250: size_estimate = "Large (250+)"
+                    elif emp_count > 50: size_estimate = f"Medium ({emp_count})"
+                    elif emp_count > 10: size_estimate = f"Small ({emp_count})"
+                    else: size_estimate = f"Micro ({emp_count})"
+                except:
+                    size_estimate = str(employees)
+            elif reviews_count > 500:
+                size_estimate = "Large (est.)"
             elif reviews_count > 100:
-                size_estimate = "Medium"
+                size_estimate = "Medium (est.)"
             elif reviews_count > 20:
-                size_estimate = "Small"
+                size_estimate = "Small (est.)"
+            elif reviews_count > 0:
+                size_estimate = f"Local ({reviews_count} reviews)"
             else:
-                size_estimate = "Micro/Local"
+                size_estimate = "Unknown"
             
             # --- LEAD QUALITY SCORE (1-6 stars) ---
             quality_score = 0
@@ -264,9 +300,9 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             
             mapped_results.append({
                 "Business Name": name,
-                "Address": item.get("full_address", item.get("address", "")),
+                "Address": item.get("address", item.get("full_address", "")),
                 "Rating": item.get("rating") or 0.0,
-                "Sector": item.get("category", item.get("type", "Search Result")),
+                "Sector": sector_val,
                 "Website": website,
                 "Phone": phone,
                 "lat": lat,
@@ -274,11 +310,11 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 "place_id": item.get("place_id", item.get("google_id")),
                 "Source": "Outscraper V3",
                 "Distance": dist_val,
-                # --- NEW ENRICHED FIELDS ---
+                # --- ENRICHED FIELDS ---
                 "Reviews": reviews_count,
                 "Size": size_estimate,
                 "Description": description or "",
-                "Owner": owner or "",
+                "Owner": owner,
                 "Social": social_links,
                 "Email": emails[0] if emails else "",
                 "Emails": emails,
