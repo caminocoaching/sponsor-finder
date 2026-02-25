@@ -1052,12 +1052,7 @@ with st.sidebar:
     
     st.divider()
     st.header("Search Config")
-    search_radius = st.slider("Radius (Miles)", 10, 500, 50)
     search_mode = st.radio("Mode", ["Sector Search", "Company Scout"])
-    
-    location_search_ctx = ", ".join([p for p in [saved_town, saved_state, saved_country, saved_zip] if p])
-    if not location_search_ctx:
-        location_search_ctx = "Silverstone, UK" # Fallback
     
     scout_company = ""
     scout_location = ""
@@ -1075,6 +1070,12 @@ with st.sidebar:
         scout_company = st.text_input("Company Name")
         scout_location = st.text_input("City / Location", value=saved_town)
         search_query = f"{scout_company} in {scout_location}" if scout_company else ""
+
+    search_radius = st.slider("Radius (Miles)", 10, 500, 50)
+    
+    location_search_ctx = ", ".join([p for p in [saved_town, saved_state, saved_country, saved_zip] if p])
+    if not location_search_ctx:
+        location_search_ctx = "Silverstone, UK"  # Fallback
 
     st.markdown("---")
     st.markdown("---")
