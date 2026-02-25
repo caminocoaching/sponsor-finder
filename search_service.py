@@ -25,9 +25,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
          st.error("Google API Key is required for strict radius search (to determine center coordinates).")
          return [], None
 
-    # 1. Get Center Coordinates (Anchor)
-    start_lat, start_lon = get_lat_long(google_api_key, location_str)
-    # ... (rest of logic)
+    # --- 1. Get Center Coordinates (Anchor) & Detect Region ---
+    start_lat, start_lon, detected_region = get_lat_long(google_api_key, location_str)
     
     if not start_lat or not start_lon:
          st.error(f"Could not find coordinates for: {location_str}")
@@ -37,11 +36,11 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
     radius_meters = int(radius * 1609.34)
     
     # Determine Region Code (Outscraper requires ISO 2 codes)
-    region_code = "US" # Default to US if unknown
+    region_code = detected_region or "US" # Use Google's detection or default to US
     loc_upper = (location_str or "").upper()
     
-    # Common Mapping
-    if "UK" in loc_upper or "UNITED KINGDOM" in loc_upper or "ENGLAND" in loc_upper or "SCOTLAND" in loc_upper or "WALES" in loc_upper:
+    # Manual Override Mapping (Highest Priority)
+    if "UK" in loc_upper or "UNITED KINGDOM" in loc_upper or "ENGLAND" in loc_upper or "SCOTLAND" in loc_upper or "WALES" in loc_upper or region_code == "GB":
         region_code = "GB"
     elif "USA" in loc_upper or "UNITED STATES" in loc_upper:
         region_code = "US"
@@ -97,15 +96,11 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             "async": "false"
         }
         
-        # print(f"DEBUG REF PARAMS: {params}")
-        
         response = client._request('GET', '/maps/search-v3', params=params)
         # Handle Response (Client usually returns JSON or Response object)
         # SDK _request UNWRAPS the 'data' key automatically! 
         # So 'data' here is likely [[...]] NOT {"data": [[...]]}
         data = response.json() if hasattr(response, 'json') else response
-        
-        # print(f"DEBUG REF RAW RESPONSE: {data}")
         
         raw_businesses = []
         
@@ -413,28 +408,49 @@ def get_lat_long(api_key, location_name):
     """
     Helper to resolve a location string (e.g. "Silverstone, UK") to Lat/Lon.
     Uses the same Places API Text Search but looks for the location itself.
+    Returns (lat, lon, country_code).
     """
     # [OPTIMIZATION] Known locations cache to redundant API calls
     if "Middleton Cheney" in location_name:
-         return 52.073, -1.274
+         return 52.073, -1.274, "GB"
 
     url = "https://places.googleapis.com/v1/places:searchText"
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.location"
+        "X-Goog-FieldMask": "places.location,places.formattedAddress"
     }
-    payload = {"textQuery": location_name}
     
-    try:
-        resp = requests.post(url, json=payload, headers=headers)
-        data = resp.json()
-        if "places" in data and len(data["places"]) > 0:
-            loc = data["places"][0]["location"]
-            return loc["latitude"], loc["longitude"]
-    except:
-        pass
-    return None, None
+    # [ROBUSTNESS] Fallback loop for specific addresses
+    # If "Specific House, Street, Town, UK" fails, try "Street, Town, UK", then "Town, UK"
+    parts = [p.strip() for p in location_name.split(",") if p.strip()]
+    
+    for i in range(len(parts)):
+        current_query = ", ".join(parts[i:])
+        payload = {"textQuery": current_query}
+        
+        try:
+            resp = requests.post(url, json=payload, headers=headers)
+            data = resp.json()
+            if "places" in data and len(data["places"]) > 0:
+                place = data["places"][0]
+                loc = place["location"]
+                addr = (place.get("formattedAddress") or "").upper()
+                
+                # Detect country code from formatted address
+                country_code = "US"
+                if "UK" in addr or "UNITED KINGDOM" in addr: country_code = "GB"
+                elif "AUSTRALIA" in addr: country_code = "AU"
+                elif "CANADA" in addr: country_code = "CA"
+                elif "NEW ZEALAND" in addr: country_code = "NZ"
+                elif "HUNGARY" in addr: country_code = "HU"
+                elif "IRELAND" in addr: country_code = "IE"
+                
+                return loc["latitude"], loc["longitude"], country_code
+        except:
+            continue # Try next broader part
+            
+    return None, None, None
 
 def search_google_places(api_key, query, location_ctx, radius_miles, sector_name=None, pagetoken=None):
     """
@@ -450,7 +466,7 @@ def search_google_places(api_key, query, location_ctx, radius_miles, sector_name
     }
     
     # 1. Prepare Payload
-    start_lat, start_lon = get_lat_long(api_key, location_ctx)
+    start_lat, start_lon, _ = get_lat_long(api_key, location_ctx)
 
     if pagetoken:
         payload = {"pageToken": pagetoken}

@@ -1646,7 +1646,7 @@ if current_tab == " Search & Add":
                     
                     # Get Lat/Lon once
                     from search_service import get_lat_long
-                    lat, lon = get_lat_long(google_api_key, location_search_ctx)
+                    lat, lon, _ = get_lat_long(google_api_key, location_search_ctx)
                     
                     if not lat:
                         st.error("Could not geocode location for Legacy Search.")
