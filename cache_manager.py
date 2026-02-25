@@ -14,8 +14,8 @@ def get_cached_search(query, location, radius, limit=100, skip=0):
     # Normalize inputs for consistent key generation
     norm_query = (query or "").lower().strip()
     norm_loc = (location or "").lower().strip()
-    key = f"search_v3:{norm_query}:{norm_loc}:{radius}:{limit}:{skip}"
-    
+    key = f"search_v3e:{norm_query}:{norm_loc}:{radius}:{limit}:{skip}"
+
     result = cache.get(key)
     if result:
         return result
@@ -27,8 +27,8 @@ def set_cached_search(query, location, radius, limit, skip, data, expire=604800)
     """
     norm_query = (query or "").lower().strip()
     norm_loc = (location or "").lower().strip()
-    key = f"search_v3:{norm_query}:{norm_loc}:{radius}:{limit}:{skip}"
-    
+    key = f"search_v3e:{norm_query}:{norm_loc}:{radius}:{limit}:{skip}"
+
     cache.set(key, data, expire=expire)
 
 def clear_cache():

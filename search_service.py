@@ -86,14 +86,15 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
         # V3 Direct Parameters for Strict Radius
         # --- STRATEGY 1: STRICT DROPOFF (Preferred) ---
         params = {
-            "query": query, 
+            "query": query,
             "coordinates": f"{start_lat},{start_lon}",
-            "dropoff": radius_meters, 
-            "limit": limit, 
+            "dropoff": radius_meters,
+            "limit": limit,
             "skip": skip,
-            "language": "en", 
+            "language": "en",
             "region": region_code,
-            "async": "false"
+            "async": "false",
+            "domains_service": "true"  # Enrichment: scrapes websites for emails & social media links
         }
         
         response = client._request('GET', '/maps/search-v3', params=params)
@@ -213,12 +214,19 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             description = item.get("description", item.get("about", ""))
             owner = item.get("owner_title", item.get("owner", ""))
             
-            # Social media links (Outscraper extracts these)
+            # Social media links (enriched via domains_service)
             social_links = {}
             for social_key in ["facebook", "instagram", "twitter", "linkedin", "youtube"]:
                 val = item.get(social_key, "")
                 if val:
                     social_links[social_key] = val
+
+            # Email addresses (enriched via domains_service)
+            emails = []
+            for email_key in ["email_1", "email_2", "email_3", "email"]:
+                val = item.get(email_key, "")
+                if val and val not in emails:
+                    emails.append(val)
             
             # --- COMPANY SIZE ESTIMATION (from review count) ---
             if reviews_count > 500:
@@ -230,12 +238,14 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             else:
                 size_estimate = "Micro/Local"
             
-            # --- LEAD QUALITY SCORE (1-5 stars) ---
+            # --- LEAD QUALITY SCORE (1-6 stars) ---
             quality_score = 0
             if website:
                 quality_score += 1  # Has a website
             if social_links:
                 quality_score += 1  # Has social media presence
+            if emails:
+                quality_score += 1  # Has contact email
             if dist_val <= 25:
                 quality_score += 1  # Very local (within 25 miles)
             if 5 <= reviews_count <= 500:
@@ -261,6 +271,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 "Description": description or "",
                 "Owner": owner or "",
                 "Social": social_links,
+                "Email": emails[0] if emails else "",
+                "Emails": emails,
                 "Quality": quality_score,
                 "Is Chain": False
             })

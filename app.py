@@ -253,12 +253,12 @@ def calendar_contact_card(lead_id):
     # Determine current sequence step
     seq_options = [
         "Email: Cold Opener",
-        "LI Msg 1: Connect",
-        "LI Msg 2: Thanks for connecting (Day 2)",
-        "LI Msg 3: Homework (Day 7)",
-        "LI Msg 4: Momentum (Day 14)",
-        "LI Msg 5: Scarcity (Day 21)",
-        "LI Msg 6: Final (Day 28)"
+        "LI Connect: Request",
+        "LI Msg 1: Intro (Day 2)",
+        "LI Msg 2: Homework (Day 7)",
+        "LI Msg 3: Momentum (Day 14)",
+        "LI Msg 4: Scarcity (Day 21)",
+        "LI Msg 5: Final (Day 28)"
     ]
     
     last_sent_step = lead_notes.get('outreach_step', -1)
@@ -618,8 +618,9 @@ def mock_search_places(location, radius, sector, mode="sector"):
 
 def _format_contact_name(full_name, template_type, salutation="Mr"):
     """Format contact name based on message type.
-    - Initial messages (Email opener, LI Msg 1): formal 'Mr/Mrs/Miss LastName'
-    - Follow-up messages (LI Msg 2+): first name only
+    - Email opener: formal 'Mr/Mrs/Miss LastName'
+    - LI Connect Request: first name only (casual connection note)
+    - LI follow-up messages (Msg 1+): first name only
     - salutation: 'Mr', 'Mrs', 'Miss', 'Ms', 'Dr' (selected per contact)
     """
     if not full_name or full_name.strip() == "":
@@ -629,16 +630,16 @@ def _format_contact_name(full_name, template_type, salutation="Mr"):
     first_name = name_parts[0] if name_parts else full_name
     last_name = name_parts[-1] if len(name_parts) > 1 else ""
     
-    # Initial contact messages: formal addressing
-    is_initial = template_type in ("Email: Cold Opener", "LI Msg 1: Connect")
+    # Email opener: formal addressing with title
+    is_formal = template_type in ("Email: Cold Opener",)
     
-    if is_initial:
+    if is_formal:
         if last_name:
             return f"{salutation} {last_name}"
         else:
             return f"{salutation} {first_name}"
     else:
-        # Follow-up messages: use first name (they know you now)
+        # LinkedIn messages and follow-ups: first name only
         return first_name
 
 def generate_message(template_type, business_name, rider_name, sector, context_answers=None, town="MyTown", championship="Championship", extra_context={}, contact_name="", salutation="Mr"):
@@ -1339,17 +1340,24 @@ if current_tab == "📊 Active Campaign":
             # Message sequence for calendar labels
             _MSG_SEQUENCE = [
                 "Email: Cold Opener",
-                "LI Msg 1: Connect",
-                "LI Msg 2: Thanks for connecting (Day 2)",
-                "LI Msg 3: Homework (Day 7)",
-                "LI Msg 4: Momentum (Day 14)",
-                "LI Msg 5: Scarcity (Day 21)",
-                "LI Msg 6: Final (Day 28)"
+                "LI Connect: Request",
+                "LI Msg 1: Intro (Day 2)",
+                "LI Msg 2: Homework (Day 7)",
+                "LI Msg 3: Momentum (Day 14)",
+                "LI Msg 4: Scarcity (Day 21)",
+                "LI Msg 5: Final (Day 28)"
             ]
+            
+            # Statuses that should NOT appear in the calendar (user moved them forward)
+            _EXCLUDED_STATUSES = {'Call Booked', 'Discovery Call', 'Proposal', 'Secured', 'Lost', 'Not Interested'}
             
             events = []
             for _, row in df_leads.iterrows():
                 if pd.notnull(row['Next Action']):
+                    # Skip leads that have been moved to a future stage
+                    if row['Status'] in _EXCLUDED_STATUSES:
+                        continue
+                    
                     # Determine next message step from notes
                     notes = row.get('Notes', {})
                     if isinstance(notes, str):
@@ -1378,7 +1386,6 @@ if current_tab == "📊 Active Campaign":
                         next_msg_label = "Opener"
                     
                     # Show full contact name + company + sequence step
-                    # Full name for easy cross-referencing with LinkedIn
                     contact_display = (row.get('Contact Name', '') or '').strip()
                     company = row['Business Name']
                     if contact_display:
@@ -2317,12 +2324,12 @@ Supply a source URL for every data point. Do not guess emails."""
                         
                         seq_options = [
                             "Email: Cold Opener",
-                            "LI Msg 1: Connect",
-                            "LI Msg 2: Thanks for connecting (Day 2)",
-                            "LI Msg 3: Homework (Day 7)",
-                            "LI Msg 4: Momentum (Day 14)",
-                            "LI Msg 5: Scarcity (Day 21)",
-                            "LI Msg 6: Final (Day 28)"
+                            "LI Connect: Request",
+                            "LI Msg 1: Intro (Day 2)",
+                            "LI Msg 2: Homework (Day 7)",
+                            "LI Msg 3: Momentum (Day 14)",
+                            "LI Msg 4: Scarcity (Day 21)",
+                            "LI Msg 5: Final (Day 28)"
                         ]
                         
                         # Auto-select to the next step based on last sent
