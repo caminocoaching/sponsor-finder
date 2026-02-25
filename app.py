@@ -10,6 +10,7 @@ import json
 from search_service import mock_search_places, search_google_places, search_google_legacy_nearby, search_outscraper
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
+from enrichment_service import search_apollo_people, extract_domain
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
@@ -1098,6 +1099,14 @@ with st.sidebar:
             
             st.warning("⚖️ Compliance Note: Use Outscraper to collect **Public Business Data** only (B2B). Avoid extracting private personal details to maintain GDPR/CCPA safety.", icon="🛡️")
              
+            # Apollo Key Logic
+            saved_apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
+            apollo_key = st.text_input("Apollo.io API Key (Optional)", value=saved_apollo_key, type="password", help="Used to automatically find the Managing Director / CEO on save.")
+            if apollo_key:
+                 st.session_state.user_profile["apollo_api_key"] = apollo_key
+                 if apollo_key != saved_apollo_key:
+                     db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
+                     st.toast("Apollo Key Saved!")
 
     
     if airtable_manager.is_configured():
@@ -1894,7 +1903,25 @@ if current_tab == " Search & Add":
                     
                     # Build enriched notes from search data
                     enriched_notes = {}
-                    if row.get("Owner"):
+                    
+                    # --- NEW: APOLLO.IO ENRICHMENT --- 
+                    apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
+                    if apollo_key and b_web and not b_contact:
+                        st.toast(f"🔎 Searching Apollo.io for {b_name} decision maker...")
+                        domain = extract_domain(b_web)
+                        apollo_res = search_apollo_people(apollo_key, domain)
+                        
+                        if "error" not in apollo_res:
+                            title_str = apollo_res.get('Title', '')
+                            name_str = f"{apollo_res.get('First Name', '')} {apollo_res.get('Last Name', '')}".strip()
+                            if name_str:
+                                b_contact = f"{name_str} ({title_str})" if title_str else name_str
+                                enriched_notes["owner"] = b_contact
+                                if apollo_res.get('LinkedIn'):
+                                    enriched_notes["contact_url"] = apollo_res['LinkedIn']
+                                st.success(f"🎯 Found Decision Maker: {b_contact}")
+                    
+                    if not b_contact and row.get("Owner"):
                         enriched_notes["owner"] = row["Owner"]
                     if row.get("Description"):
                         enriched_notes["description"] = row["Description"]
