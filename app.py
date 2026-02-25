@@ -10,7 +10,7 @@ import json
 from search_service import mock_search_places, search_google_places, search_google_legacy_nearby, search_outscraper
 from sheets_manager import sheet_manager
 from airtable_manager import airtable_manager
-from enrichment_service import search_apollo_people, search_outscraper_contacts, extract_domain, find_linkedin_company_page
+from enrichment_service import search_apollo_people, search_outscraper_contacts, extract_domain, find_linkedin_company_page, search_companies_house
 from streamlit_calendar import calendar
 
 # --- CONFIGURATION ---
@@ -2073,6 +2073,67 @@ if current_tab == " Search & Add":
                     if row.get("Emails") and isinstance(row["Emails"], list) and not enriched_notes.get("emails"):
                         enriched_notes["emails"] = row["Emails"]
 
+                    # --- COMPANIES HOUSE (UK Directors/PSCs — FREE) ---
+                    ch_key = st.secrets.get("companies_house_api_key", "")
+                    if ch_key and b_name:
+                        st.toast(f"🏛️ Checking Companies House for {b_name}...")
+                        ch_res = search_companies_house(ch_key, b_name)
+                        
+                        if "error" not in ch_res:
+                            # Save company data
+                            if ch_res.get("company_number"):
+                                enriched_notes["ch_company_number"] = ch_res["company_number"]
+                                enriched_notes["ch_company_name"] = ch_res.get("company_name", "")
+                            if ch_res.get("sic_codes"):
+                                enriched_notes["sic_codes"] = ch_res["sic_codes"]
+                            if ch_res.get("registered_address"):
+                                enriched_notes["ch_address"] = ch_res["registered_address"]
+                            
+                            # Save directors list
+                            if ch_res.get("directors"):
+                                enriched_notes["ch_directors"] = [
+                                    {"name": d["name"], "role": d["role"]} 
+                                    for d in ch_res["directors"]
+                                ]
+                            
+                            # Save PSCs (owners)
+                            if ch_res.get("pscs"):
+                                enriched_notes["ch_pscs"] = [
+                                    {"name": p["name"]} for p in ch_res["pscs"]
+                                ]
+                            
+                            # Use CH best contact if Apollo didn't find one
+                            if ch_res.get("best_contact") and not b_contact:
+                                b_contact = ch_res["best_contact"]
+                                enriched_notes["owner"] = b_contact
+                                
+                                # Determine title from CH data
+                                ch_title = "Director"
+                                if ch_res.get("pscs"):
+                                    ch_title = "Owner (PSC)"
+                                for d in ch_res.get("directors", []):
+                                    if d["name"] == ch_res["best_contact"]:
+                                        ch_title = d.get("role", "Director").replace("-", " ").title()
+                                        break
+                                
+                                enriched_notes["owner_title"] = ch_title
+                                b_contact = f"{ch_res['best_contact']} ({ch_title})"
+                                st.success(f"🏛️ Companies House: **{b_contact}**")
+                            
+                            # Show other directors found
+                            all_people = []
+                            for p in ch_res.get("pscs", []):
+                                if p["name"] != ch_res.get("best_contact"):
+                                    all_people.append(f"{p['name']} (Owner)")
+                            for d in ch_res.get("directors", []):
+                                if d["name"] != ch_res.get("best_contact"):
+                                    role_label = d.get("role", "").replace("-", " ").title()
+                                    all_people.append(f"{d['name']} ({role_label})")
+                            if all_people:
+                                st.info(f"🏛️ Also registered: {', '.join(all_people[:3])}")
+                        else:
+                            st.caption(f"Companies House: {ch_res.get('error', 'No results')}")
+
                     # --- LINKEDIN COMPANY PAGE LOOKUP (only if nothing found yet) ---
                     has_linkedin = enriched_notes.get("linkedin_company") or \
                                    enriched_notes.get("contact_url", "").startswith("http") or \
@@ -2265,18 +2326,35 @@ if current_tab == "✉️ Outreach Assistant":
                             st.markdown(f"📧 {lead_notes_data['email']}")
                         if has_linkedin:
                             st.markdown(f"🔗 [LinkedIn Profile]({lead_notes_data['contact_url']})")
-                        
                         company_li = lead_notes_data.get('linkedin_company', '')
                         if company_li:
                             st.markdown(f"🏢 [Company LinkedIn]({company_li})")
                         
-                        # Alternate contacts
+                        # Alternate contacts (Apollo)
                         alts = lead_notes_data.get('alternates', [])
                         if alts:
                             alt_text = ", ".join([f"{a.get('name','')} ({a.get('title','')})" for a in alts[:2]])
                             st.caption(f"Also found: {alt_text}")
                     
-                    st.success("✅ Apollo found your decision-maker. Ready to connect!")
+                    # Companies House data (directors/PSCs)
+                    ch_dirs = lead_notes_data.get('ch_directors', [])
+                    ch_pscs = lead_notes_data.get('ch_pscs', [])
+                    if ch_dirs or ch_pscs:
+                        with st.expander(f"🏛️ Companies House ({len(ch_dirs)} directors, {len(ch_pscs)} owners)", expanded=False):
+                            if ch_pscs:
+                                st.markdown("**Owners (PSC):**")
+                                for p in ch_pscs:
+                                    st.markdown(f"• {p['name']}")
+                            if ch_dirs:
+                                st.markdown("**Directors:**")
+                                for d in ch_dirs:
+                                    role = d.get('role', '').replace('-', ' ').title()
+                                    st.markdown(f"• {d['name']} — {role}")
+                            if lead_notes_data.get('ch_company_number'):
+                                ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{lead_notes_data['ch_company_number']}"
+                                st.markdown(f"[View on Companies House]({ch_url})")
+                    
+                    st.success("✅ Decision-maker found. Ready to connect!")
                 else:
                     st.warning("⚠️ Apollo couldn't find a contact for this company. Use the research tools below to find one manually.")
                 

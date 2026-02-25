@@ -331,3 +331,195 @@ def extract_domain(url):
     domain = domain.split("/")[0]
     domain = domain.replace("www.", "")
     return domain
+
+
+def search_companies_house(api_key, business_name):
+    """
+    Search UK Companies House for a business and return its directors/PSCs.
+    
+    Completely FREE API — no credits, no cost.
+    
+    Returns:
+        dict with keys:
+        - company_name: Official registered name
+        - company_number: Companies House number
+        - company_status: active/dissolved
+        - sic_codes: List of SIC industry codes
+        - registered_address: Official address
+        - directors: List of {name, role, appointed_on}
+        - pscs: List of {name, kind} (persons with significant control = owners)
+        - best_contact: The most senior person found (PSC first, then director)
+    """
+    if not api_key or not business_name:
+        return {"error": "Missing API key or business name"}
+    
+    base_url = "https://api.company-information.service.gov.uk"
+    
+    # Auth: API key as username, no password
+    auth = (api_key, "")
+    
+    try:
+        # Step 1: Search for the company
+        search_resp = requests.get(
+            f"{base_url}/search/companies",
+            params={"q": business_name, "items_per_page": 5},
+            auth=auth,
+            timeout=10
+        )
+        
+        if search_resp.status_code == 401:
+            return {"error": "Invalid Companies House API key"}
+        if search_resp.status_code != 200:
+            return {"error": f"Search failed: {search_resp.status_code}"}
+        
+        search_data = search_resp.json()
+        items = search_data.get("items", [])
+        
+        if not items:
+            return {"error": f"No company found for '{business_name}'"}
+        
+        # Find the best match — prefer active companies
+        company = None
+        for item in items:
+            if item.get("company_status") == "active":
+                company = item
+                break
+        if not company:
+            company = items[0]
+        
+        company_number = company.get("company_number", "")
+        company_name = company.get("title", "")
+        company_status = company.get("company_status", "")
+        
+        result = {
+            "company_name": company_name,
+            "company_number": company_number,
+            "company_status": company_status,
+            "sic_codes": [],
+            "registered_address": "",
+            "directors": [],
+            "pscs": [],
+            "best_contact": ""
+        }
+        
+        # Step 2: Get company profile (SIC codes, address)
+        try:
+            profile_resp = requests.get(
+                f"{base_url}/company/{company_number}",
+                auth=auth, timeout=10
+            )
+            if profile_resp.status_code == 200:
+                profile = profile_resp.json()
+                result["sic_codes"] = profile.get("sic_codes", [])
+                
+                addr = profile.get("registered_office_address", {})
+                addr_parts = [
+                    addr.get("address_line_1", ""),
+                    addr.get("address_line_2", ""),
+                    addr.get("locality", ""),
+                    addr.get("postal_code", "")
+                ]
+                result["registered_address"] = ", ".join([p for p in addr_parts if p])
+        except:
+            pass
+        
+        # Step 3: Get officers (directors, secretaries)
+        try:
+            officers_resp = requests.get(
+                f"{base_url}/company/{company_number}/officers",
+                auth=auth, timeout=10
+            )
+            if officers_resp.status_code == 200:
+                officers = officers_resp.json().get("items", [])
+                for officer in officers:
+                    # Only active officers (not resigned)
+                    if officer.get("resigned_on"):
+                        continue
+                    
+                    name = officer.get("name", "")
+                    role = officer.get("officer_role", "")
+                    appointed = officer.get("appointed_on", "")
+                    
+                    # Companies House format: "SMITH, John David" → "John Smith"
+                    clean_name = _clean_ch_name(name)
+                    
+                    result["directors"].append({
+                        "name": clean_name,
+                        "raw_name": name,
+                        "role": role,
+                        "appointed_on": appointed
+                    })
+        except:
+            pass
+        
+        # Step 4: Get Persons with Significant Control (actual owners)
+        try:
+            psc_resp = requests.get(
+                f"{base_url}/company/{company_number}/persons-with-significant-control",
+                auth=auth, timeout=10
+            )
+            if psc_resp.status_code == 200:
+                pscs = psc_resp.json().get("items", [])
+                for psc in pscs:
+                    name = psc.get("name", "")
+                    kind = psc.get("kind", "")
+                    natures = psc.get("natures_of_control", [])
+                    
+                    clean_name = _clean_ch_name(name)
+                    
+                    result["pscs"].append({
+                        "name": clean_name,
+                        "raw_name": name,
+                        "kind": kind,
+                        "control": natures
+                    })
+        except:
+            pass
+        
+        # Determine best contact: PSCs first (owners), then directors
+        if result["pscs"]:
+            result["best_contact"] = result["pscs"][0]["name"]
+        elif result["directors"]:
+            # Prefer directors over secretaries
+            directors_only = [d for d in result["directors"] if "director" in d.get("role", "").lower()]
+            if directors_only:
+                result["best_contact"] = directors_only[0]["name"]
+            else:
+                result["best_contact"] = result["directors"][0]["name"]
+        
+        return result
+        
+    except requests.exceptions.Timeout:
+        return {"error": "Companies House API timeout"}
+    except Exception as e:
+        return {"error": f"Companies House error: {str(e)}"}
+
+
+def _clean_ch_name(raw_name):
+    """
+    Clean Companies House name format.
+    'SMITH, John David' → 'John Smith'
+    'John David SMITH' → 'John Smith'
+    """
+    if not raw_name:
+        return ""
+    
+    # Handle "SURNAME, Forename" format
+    if "," in raw_name:
+        parts = raw_name.split(",", 1)
+        surname = parts[0].strip().title()
+        forenames = parts[1].strip().split()
+        first_name = forenames[0].title() if forenames else ""
+        return f"{first_name} {surname}".strip()
+    
+    # Handle "Forename SURNAME" format (all-caps surname)
+    parts = raw_name.split()
+    if len(parts) >= 2:
+        # Find the all-caps part (surname)
+        caps_parts = [p for p in parts if p.isupper() and len(p) > 1]
+        if caps_parts:
+            surname = caps_parts[-1].title()
+            first_name = parts[0].title()
+            return f"{first_name} {surname}"
+    
+    return raw_name.title()
