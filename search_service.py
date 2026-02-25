@@ -283,14 +283,13 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
             else:
                 size_estimate = "Unknown"
             
-            # --- LEAD QUALITY SCORE (1-6 stars) ---
+            # --- LEAD QUALITY SCORE (1-5 stars) ---
+            # Only uses data available from search (not enrichment)
             quality_score = 0
             if website:
-                quality_score += 1  # Has a website
-            if social_links:
-                quality_score += 1  # Has social media presence
-            if emails:
-                quality_score += 1  # Has contact email
+                quality_score += 1  # Has a website (can be enriched)
+            if item.get("phone"):
+                quality_score += 1  # Has phone number (contactable)
             if dist_val <= 25:
                 quality_score += 1  # Very local (within 25 miles)
             if 5 <= reviews_count <= 500:

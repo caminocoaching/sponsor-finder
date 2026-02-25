@@ -1888,10 +1888,6 @@ if current_tab == " Search & Add":
             disp_cols.append("Score")
         if "Size" in df_results.columns:
             disp_cols.append("Size")
-        if "Socials" in df_results.columns:
-            disp_cols.append("Socials")
-        if "Email" in df_results.columns:
-            disp_cols.append("Email")
         if "Distance" in df_results.columns:
             disp_cols.append("Distance")
         
