@@ -1995,9 +1995,9 @@ if current_tab == " Search & Add":
                         enriched_notes["company_size"] = row["Size"]
                     if row.get("Quality"):
                         enriched_notes["quality_score"] = int(row["Quality"])
-                    if row.get("Email"):
+                    if row.get("Email") and not enriched_notes.get("email"):
                         enriched_notes["email"] = row["Email"]
-                    if row.get("Emails") and isinstance(row["Emails"], list):
+                    if row.get("Emails") and isinstance(row["Emails"], list) and not enriched_notes.get("emails"):
                         enriched_notes["emails"] = row["Emails"]
 
                     # --- LINKEDIN COMPANY PAGE LOOKUP ---
@@ -2582,6 +2582,19 @@ Supply a source URL for every data point. Do not guess emails."""
                         enriched_email = existing_notes.get('email', '')
                         if enriched_email:
                             st.markdown(f"**Email:** {enriched_email}")
+                        # Additional emails
+                        all_emails = existing_notes.get('emails', [])
+                        if isinstance(all_emails, list) and len(all_emails) > 1:
+                            extra = [e for e in all_emails if e != enriched_email]
+                            if extra:
+                                st.markdown(f"**Other emails:** {', '.join(extra)}")
+
+                        # Phone numbers from contacts enrichment
+                        phones = existing_notes.get('phones', [])
+                        if isinstance(phones, list) and phones:
+                            st.markdown(f"**Phone:** {phones[0]}")
+                            if len(phones) > 1:
+                                st.markdown(f"**Other phones:** {', '.join(phones[1:])}")
                     
                     homework_notes = st.text_area(
                         "✏️ Your homework notes (2-3 things you noticed about their business)",

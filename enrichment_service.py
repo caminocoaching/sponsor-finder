@@ -1,5 +1,67 @@
 import requests
 
+
+def search_outscraper_contacts(outscraper_key, domain):
+    """
+    Use Outscraper Emails & Contacts API to find contact details for a domain.
+    Returns emails, phones, social links, and site metadata.
+    Costs ~$0.003 per lookup (pay-as-you-go, no monthly fee).
+    """
+    if not outscraper_key or not domain:
+        return {"error": "Missing key or domain"}
+
+    try:
+        from outscraper import OutscraperClient
+        client = OutscraperClient(api_key=outscraper_key)
+
+        results = client.emails_and_contacts([domain])
+
+        # Results come as a list of dicts, one per domain
+        if not results or not isinstance(results, list) or len(results) == 0:
+            return {"error": "No contact data found."}
+
+        data = results[0] if isinstance(results[0], dict) else {}
+        if not data:
+            return {"error": "No contact data found."}
+
+        # Extract emails
+        emails = []
+        for key in ["email_1", "email_2", "email_3"]:
+            val = data.get(key, "")
+            if val and val not in emails:
+                emails.append(val)
+
+        # Extract phones
+        phones = []
+        for key in ["phone_1", "phone_2", "phone_3"]:
+            val = data.get(key, "")
+            if val and val not in phones:
+                phones.append(val)
+
+        # Extract social links
+        social = {}
+        for key in ["facebook", "instagram", "twitter", "linkedin", "youtube"]:
+            val = data.get(key, "")
+            if val:
+                social[key] = val
+
+        # Site metadata
+        site_title = data.get("title", "")
+        site_description = data.get("description", "")
+
+        return {
+            "emails": emails,
+            "phones": phones,
+            "social": social,
+            "linkedin": social.get("linkedin", ""),
+            "site_title": site_title,
+            "site_description": site_description,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def search_apollo_people(api_key, domain):
     """
     Search Apollo for C-Suite, Founder, or Director level people for a specific domain.
