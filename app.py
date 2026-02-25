@@ -1063,6 +1063,7 @@ with st.sidebar:
     
     scout_company = ""
     scout_location = ""
+    selected_sector = "Target Company"  # Default for Company Scout mode
     
     if search_mode == "Sector Search":
         selected_sector = st.selectbox("Target Sector", SECTORS, index=0, key="target_sector_select")
