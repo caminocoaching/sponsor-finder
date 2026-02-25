@@ -964,12 +964,21 @@ else:
 
 # Load User
 user_data = db.get_user_profile(st.session_state.user_id)
-user_profile = user_data['profile']
+if not user_data:
+    # First-time user or missing profile — create it
+    db.save_user_profile(st.session_state.user_id, st.session_state.user_id, {})
+    user_data = db.get_user_profile(st.session_state.user_id)
+
+if not user_data:
+    st.error("Could not load user profile. Please refresh the page.")
+    st.stop()
+
+user_profile = user_data.get('profile', {}) or {}
 
 # Initialize Session Globals for easy access
 st.session_state.user_profile = user_profile
-st.session_state.user_email = user_data['email']
-st.session_state.user_name = user_data['name']
+st.session_state.user_email = user_data.get('email', '')
+st.session_state.user_name = user_data.get('name', '')
 
 # Check Onboarding
 if not user_profile.get("onboarding_complete"):
