@@ -385,6 +385,58 @@ def calendar_contact_card(lead_id):
         else:
             st.metric("📨 Next Step", "✅ Secured!")
     
+    # --- ROW 4: Stage Advancement Buttons ---
+    st.caption("Move to stage:")
+    adv_cols = st.columns(5)
+    
+    with adv_cols[0]:
+        if current_pipeline != 0:
+            if st.button("🔄 Connect", key=f"card_to_connect_{lead_id}", use_container_width=True):
+                db.update_lead_status(lead_id, "Active")
+                st.toast("↩️ Moved back to Connect")
+                time.sleep(0.5)
+                st.rerun()
+        else:
+            st.button("▶ Connect", key=f"card_at_connect_{lead_id}", disabled=True, use_container_width=True)
+    
+    with adv_cols[1]:
+        if current_pipeline < 1:
+            if st.button("📞 Discovery Call", key=f"card_to_disc_{lead_id}", use_container_width=True):
+                db.update_lead_status(lead_id, "Call Booked")
+                st.toast("📞 Moved to Discovery Call!")
+                time.sleep(0.5)
+                st.rerun()
+        elif current_pipeline == 1:
+            st.button("▶ Discovery", key=f"card_at_disc_{lead_id}", disabled=True, use_container_width=True)
+    
+    with adv_cols[2]:
+        if current_pipeline < 2:
+            if st.button("📋 Proposal", key=f"card_to_prop_{lead_id}", use_container_width=True):
+                db.update_lead_status(lead_id, "Proposal")
+                st.toast("📋 Moved to Proposal!")
+                time.sleep(0.5)
+                st.rerun()
+        elif current_pipeline == 2:
+            st.button("▶ Proposal", key=f"card_at_prop_{lead_id}", disabled=True, use_container_width=True)
+    
+    with adv_cols[3]:
+        if current_pipeline < 3:
+            if st.button("🏆 Secured", key=f"card_to_sec_{lead_id}", type="primary", use_container_width=True):
+                db.update_lead_status(lead_id, "Secured")
+                st.toast("🏆 Sponsor Secured!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
+        else:
+            st.button("🏆 Secured", key=f"card_at_sec_{lead_id}", disabled=True, use_container_width=True)
+    
+    with adv_cols[4]:
+        if st.button("❌ Lost", key=f"card_to_lost_{lead_id}", use_container_width=True):
+            db.update_lead_status(lead_id, "Lost")
+            st.toast("❌ Marked as Lost")
+            time.sleep(0.5)
+            st.rerun()
+    
     st.divider()
     
     # --- TAB: Message / Reply ---
