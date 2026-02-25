@@ -1898,7 +1898,7 @@ if current_tab == " Search & Add":
                 df_results[disp_cols],
                 width="stretch",
                 column_config={
-                    "Score": st.column_config.TextColumn("Quality", width="small"),
+                    "Score": st.column_config.TextColumn("Quality", width="small", help="A 5-star lead = local business with a website, phone, good reviews, right size. Perfect sponsor candidate."),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
                     "Socials": st.column_config.TextColumn("Social", width="small"),
                     "Email": st.column_config.TextColumn("Email", width="medium"),
