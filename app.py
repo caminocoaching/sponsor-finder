@@ -2396,6 +2396,9 @@ if current_tab == "✉️ Outreach Assistant":
                 if new_name != contact_name_raw or contact_url != saved_url:
                     if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
                         if new_name:
+                            # Auto-fix ALL CAPS names from Companies House
+                            if new_name == new_name.upper():
+                                new_name = new_name.title()
                             db.update_lead_contact(lead['id'], new_name)
                             save_notes = lead_notes_data.copy()
                             save_notes['salutation'] = contact_salutation
