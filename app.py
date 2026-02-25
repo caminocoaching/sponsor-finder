@@ -1929,76 +1929,132 @@ if current_tab == " Search & Add":
                     # Build enriched notes from search data
                     enriched_notes = {}
                     
-                    # --- OUTSCRAPER CONTACTS ENRICHMENT (replaces Apollo — pay-per-use, no subscription) ---
-                    os_key = st.session_state.user_profile.get("outscraper_key", "")
-                    if os_key and b_web:
-                        st.toast(f"🔎 Looking up contacts for {b_name}...")
-                        domain = extract_domain(b_web)
-                        contact_res = search_outscraper_contacts(os_key, domain)
-
-                        if "error" not in contact_res:
-                            # Emails
-                            if contact_res.get("emails"):
-                                enriched_notes["email"] = contact_res["emails"][0]
-                                enriched_notes["emails"] = contact_res["emails"]
-                                st.success(f"📧 Found email: {contact_res['emails'][0]}")
-
-                            # Phone numbers
-                            if contact_res.get("phones"):
-                                enriched_notes["phones"] = contact_res["phones"]
-                                st.success(f"📞 Found phone: {contact_res['phones'][0]}")
-
-                            # Social links (merge with any from search)
-                            if contact_res.get("social"):
-                                existing_social = enriched_notes.get("social_links", {})
-                                if not isinstance(existing_social, dict):
-                                    existing_social = {}
-                                # Contact enrichment fills gaps
-                                for k, v in contact_res["social"].items():
-                                    if v and not existing_social.get(k):
-                                        existing_social[k] = v
-                                enriched_notes["social_links"] = existing_social
-
-                            # LinkedIn company page
-                            if contact_res.get("linkedin"):
-                                enriched_notes["linkedin_company"] = contact_res["linkedin"]
-                                if not enriched_notes.get("contact_url"):
-                                    enriched_notes["contact_url"] = contact_res["linkedin"]
-                                st.success(f"🔗 Found LinkedIn: {contact_res['linkedin']}")
-
-                            # Site description (useful intel)
-                            if contact_res.get("site_description") and not enriched_notes.get("description"):
-                                enriched_notes["description"] = contact_res["site_description"]
-
-                    # --- APOLLO FALLBACK (only if user has a key and Outscraper didn't find a contact name) ---
+                    # --- PRIMARY ENRICHMENT: APOLLO (decision-maker + company data) ---
                     apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
-                    if apollo_key and b_web and not b_contact:
-                        st.toast(f"🔎 Searching Apollo.io for {b_name} decision maker...")
+                    apollo_found = False
+                    
+                    if apollo_key and b_web:
+                        st.toast(f"🔎 Searching Apollo for {b_name} decision maker...")
                         domain = extract_domain(b_web)
                         apollo_res = search_apollo_people(apollo_key, domain)
 
                         if "error" not in apollo_res:
+                            apollo_found = True
+                            
+                            # Decision-maker data
                             title_str = apollo_res.get('Title', '')
                             name_str = f"{apollo_res.get('First Name', '')} {apollo_res.get('Last Name', '')}".strip()
                             if name_str:
                                 b_contact = f"{name_str} ({title_str})" if title_str else name_str
                                 enriched_notes["owner"] = b_contact
-                                if apollo_res.get('LinkedIn'):
-                                    enriched_notes["contact_url"] = apollo_res['LinkedIn']
-                                st.success(f"🎯 Found Decision Maker: {b_contact}")
+                                enriched_notes["owner_first"] = apollo_res.get('First Name', '')
+                                enriched_notes["owner_last"] = apollo_res.get('Last Name', '')
+                                enriched_notes["owner_title"] = title_str
+                                st.success(f"🎯 Decision Maker: **{b_contact}**")
+                            
+                            # Email
+                            if apollo_res.get('Email'):
+                                enriched_notes["email"] = apollo_res['Email']
+                                enriched_notes["emails"] = [apollo_res['Email']]
+                                st.success(f"📧 Email: {apollo_res['Email']}")
+                            
+                            # Personal LinkedIn
+                            if apollo_res.get('LinkedIn'):
+                                enriched_notes["contact_url"] = apollo_res['LinkedIn']
+                                enriched_notes["owner_linkedin"] = apollo_res['LinkedIn']
+                                st.success(f"🔗 LinkedIn: {apollo_res['LinkedIn']}")
+                            
+                            # Company LinkedIn page
+                            if apollo_res.get('Company LinkedIn'):
+                                enriched_notes["linkedin_company"] = apollo_res['Company LinkedIn']
+                                if not enriched_notes.get("contact_url"):
+                                    enriched_notes["contact_url"] = apollo_res['Company LinkedIn']
+                            
+                            # Company firmographic data
+                            if apollo_res.get('Employee Count'):
+                                emp = apollo_res['Employee Count']
+                                enriched_notes["employee_count"] = emp
+                                if isinstance(emp, (int, float)) and emp > 0:
+                                    if emp > 250: enriched_notes["company_size"] = f"Large ({emp} employees)"
+                                    elif emp > 50: enriched_notes["company_size"] = f"Medium ({emp} employees)"
+                                    elif emp > 10: enriched_notes["company_size"] = f"Small ({emp} employees)"
+                                    else: enriched_notes["company_size"] = f"Micro ({emp} employees)"
+                                    st.success(f"👥 Company Size: {emp} employees")
+                            
+                            if apollo_res.get('Revenue'):
+                                enriched_notes["revenue"] = apollo_res['Revenue']
+                                st.success(f"💰 Revenue: {apollo_res['Revenue']}")
+                            
+                            if apollo_res.get('Industry'):
+                                enriched_notes["industry"] = apollo_res['Industry']
+                            
+                            if apollo_res.get('Founded Year'):
+                                enriched_notes["founded_year"] = apollo_res['Founded Year']
+                            
+                            if apollo_res.get('Company Phone'):
+                                enriched_notes["company_phone"] = apollo_res['Company Phone']
+                            
+                            if apollo_res.get('Short Description'):
+                                enriched_notes["description"] = apollo_res['Short Description']
+                            
+                            # Alternate contacts (other directors/managers)
+                            if apollo_res.get('Alternates'):
+                                enriched_notes["alternate_contacts"] = apollo_res['Alternates']
+                                alt_names = [f"{a['name']} ({a['title']})" for a in apollo_res['Alternates'] if a.get('name')]
+                                if alt_names:
+                                    st.info(f"👤 Also found: {', '.join(alt_names)}")
+                        else:
+                            st.warning(f"Apollo: {apollo_res.get('error', 'No results')}")
                     
+                    # --- FALLBACK: OUTSCRAPER CONTACTS (if Apollo didn't find email) ---
+                    os_key = st.session_state.user_profile.get("outscraper_key", "")
+                    if os_key and b_web and not enriched_notes.get("email"):
+                        st.toast(f"🔎 Outscraper fallback for {b_name}...")
+                        domain = extract_domain(b_web)
+                        contact_res = search_outscraper_contacts(os_key, domain)
+
+                        if "error" not in contact_res:
+                            if contact_res.get("emails") and not enriched_notes.get("email"):
+                                enriched_notes["email"] = contact_res["emails"][0]
+                                enriched_notes["emails"] = contact_res["emails"]
+                                st.success(f"📧 Found email: {contact_res['emails'][0]}")
+
+                            if contact_res.get("phones") and not enriched_notes.get("phones"):
+                                enriched_notes["phones"] = contact_res["phones"]
+
+                            if contact_res.get("social"):
+                                existing_social = enriched_notes.get("social_links", {})
+                                if not isinstance(existing_social, dict):
+                                    existing_social = {}
+                                for k, v in contact_res["social"].items():
+                                    if v and not existing_social.get(k):
+                                        existing_social[k] = v
+                                enriched_notes["social_links"] = existing_social
+
+                            if contact_res.get("linkedin") and not enriched_notes.get("linkedin_company"):
+                                enriched_notes["linkedin_company"] = contact_res["linkedin"]
+                                if not enriched_notes.get("contact_url"):
+                                    enriched_notes["contact_url"] = contact_res["linkedin"]
+
+                            if contact_res.get("site_description") and not enriched_notes.get("description"):
+                                enriched_notes["description"] = contact_res["site_description"]
+
                     if not b_contact and row.get("Owner"):
                         enriched_notes["owner"] = row["Owner"]
-                    if row.get("Description"):
+                    if row.get("Description") and not enriched_notes.get("description"):
                         enriched_notes["description"] = row["Description"]
                     if row.get("Social") and isinstance(row["Social"], dict):
-                        enriched_notes["social_links"] = row["Social"]
-                        # Auto-save LinkedIn as contact URL if available
-                        if row["Social"].get("linkedin"):
-                            enriched_notes["contact_url"] = row["Social"]["linkedin"]
+                        existing = enriched_notes.get("social_links", {})
+                        if not isinstance(existing, dict):
+                            existing = {}
+                        for k, v in row["Social"].items():
+                            if v and not existing.get(k):
+                                existing[k] = v
+                        if existing:
+                            enriched_notes["social_links"] = existing
                     if row.get("Reviews"):
                         enriched_notes["reviews_count"] = int(row["Reviews"])
-                    if row.get("Size"):
+                    if row.get("Size") and not enriched_notes.get("company_size"):
                         enriched_notes["company_size"] = row["Size"]
                     if row.get("Quality"):
                         enriched_notes["quality_score"] = int(row["Quality"])
@@ -2007,9 +2063,9 @@ if current_tab == " Search & Add":
                     if row.get("Emails") and isinstance(row["Emails"], list) and not enriched_notes.get("emails"):
                         enriched_notes["emails"] = row["Emails"]
 
-                    # --- LINKEDIN COMPANY PAGE LOOKUP ---
-                    # Only search if we don't already have a LinkedIn from social enrichment
-                    has_linkedin = enriched_notes.get("contact_url", "").startswith("http") or \
+                    # --- LINKEDIN COMPANY PAGE LOOKUP (only if nothing found yet) ---
+                    has_linkedin = enriched_notes.get("linkedin_company") or \
+                                   enriched_notes.get("contact_url", "").startswith("http") or \
                                    (enriched_notes.get("social_links", {}).get("linkedin") if isinstance(enriched_notes.get("social_links"), dict) else False)
                     if not has_linkedin:
                         os_key = st.session_state.user_profile.get("outscraper_key", "")
@@ -2018,7 +2074,6 @@ if current_tab == " Search & Add":
                             li_url = find_linkedin_company_page(os_key, b_name, b_loc)
                             if li_url:
                                 enriched_notes["linkedin_company"] = li_url
-                                # Set as contact_url if we don't have one yet
                                 if not enriched_notes.get("contact_url"):
                                     enriched_notes["contact_url"] = li_url
                                 st.success(f"🔗 Found LinkedIn: {li_url}")
@@ -2557,51 +2612,94 @@ Supply a source URL for every data point. Do not guess emails."""
                     with intel_c1:
                         st.markdown(f"**Company:** {lead['Business Name']}")
                         st.markdown(f"**Sector:** {lead.get('Sector', '—')}")
+                        if existing_notes.get('industry'):
+                            st.markdown(f"**Industry:** {existing_notes['industry']}")
                         st.markdown(f"**Contact:** {contact_name}")
+                        if existing_notes.get('owner_title'):
+                            st.markdown(f"**Title:** {existing_notes['owner_title']}")
                         if lead.get('Website'):
                             st.markdown(f"🌐 [{lead['Website']}]({lead['Website']})")
-                    with intel_c2:
-                        desc = existing_notes.get('description', '')
-                        size = existing_notes.get('company_size', '')
-                        owner = existing_notes.get('owner', '')
-                        if desc:
-                            st.markdown(f"**About:** {desc[:200]}")
-                        if size:
-                            st.markdown(f"**Est. Size:** {size}")
-                        if owner:
-                            st.markdown(f"**Owner/Contact:** {owner}")
                         
-                        social = existing_notes.get('social_links', {})
-                        if isinstance(social, dict) and social:
-                            links = []
-                            if social.get('linkedin'): links.append(f"[LinkedIn]({social['linkedin']})")
-                            if social.get('facebook'): links.append(f"[Facebook]({social['facebook']})")
-                            if social.get('instagram'): links.append(f"[Instagram]({social['instagram']})")
-                            if links:
-                                st.markdown("**Social:** " + " • ".join(links))
-
-                        # LinkedIn Company Page (from dedicated lookup)
+                        # Owner personal LinkedIn
+                        owner_li = existing_notes.get('owner_linkedin', '')
+                        if owner_li:
+                            st.markdown(f"👤 [Decision-Maker LinkedIn]({owner_li})")
+                        
+                        # LinkedIn Company Page
                         li_company = existing_notes.get('linkedin_company', '')
                         if li_company:
-                            st.markdown(f"**LinkedIn Company:** [{li_company.split('/company/')[-1].strip('/')}]({li_company})")
+                            st.markdown(f"🏢 [Company LinkedIn]({li_company})")
+                        
+                    with intel_c2:
+                        # Company size and revenue
+                        size = existing_notes.get('company_size', '')
+                        emp_count = existing_notes.get('employee_count', '')
+                        revenue = existing_notes.get('revenue', '')
+                        founded = existing_notes.get('founded_year', '')
+                        
+                        if size:
+                            st.markdown(f"**Size:** {size}")
+                        elif emp_count:
+                            st.markdown(f"**Employees:** {emp_count}")
+                        if revenue:
+                            st.markdown(f"**Revenue:** {revenue}")
+                        if founded:
+                            import datetime
+                            years_old = datetime.datetime.now().year - int(founded) if founded else 0
+                            st.markdown(f"**Founded:** {founded} ({years_old} years)")
+                        
+                        desc = existing_notes.get('description', '')
+                        if desc:
+                            st.markdown(f"**About:** {desc[:200]}")
+                        
+                        owner = existing_notes.get('owner', '')
+                        if owner:
+                            st.markdown(f"**Decision-Maker:** {owner}")
 
-                        # Email from enrichment
+                        # Email
                         enriched_email = existing_notes.get('email', '')
                         if enriched_email:
-                            st.markdown(f"**Email:** {enriched_email}")
-                        # Additional emails
+                            st.markdown(f"**📧 Email:** {enriched_email}")
                         all_emails = existing_notes.get('emails', [])
                         if isinstance(all_emails, list) and len(all_emails) > 1:
                             extra = [e for e in all_emails if e != enriched_email]
                             if extra:
                                 st.markdown(f"**Other emails:** {', '.join(extra)}")
 
-                        # Phone numbers from contacts enrichment
+                        # Phone
+                        company_phone = existing_notes.get('company_phone', '')
                         phones = existing_notes.get('phones', [])
-                        if isinstance(phones, list) and phones:
-                            st.markdown(f"**Phone:** {phones[0]}")
-                            if len(phones) > 1:
-                                st.markdown(f"**Other phones:** {', '.join(phones[1:])}")
+                        if company_phone:
+                            st.markdown(f"**📞 Phone:** {company_phone}")
+                        elif isinstance(phones, list) and phones:
+                            st.markdown(f"**📞 Phone:** {phones[0]}")
+                        if isinstance(phones, list) and len(phones) > 1:
+                            st.markdown(f"**Other phones:** {', '.join(phones[1:])}")
+                        
+                        # Social links
+                        social = existing_notes.get('social_links', {})
+                        if isinstance(social, dict) and social:
+                            links = []
+                            if social.get('linkedin'): links.append(f"[LinkedIn]({social['linkedin']})")
+                            if social.get('facebook'): links.append(f"[Facebook]({social['facebook']})")
+                            if social.get('instagram'): links.append(f"[Instagram]({social['instagram']})")
+                            if social.get('twitter'): links.append(f"[Twitter]({social['twitter']})")
+                            if social.get('youtube'): links.append(f"[YouTube]({social['youtube']})")
+                            if links:
+                                st.markdown("**Social:** " + " • ".join(links))
+                    
+                    # Alternate contacts (other directors/managers found by Apollo)
+                    alt_contacts = existing_notes.get('alternate_contacts', [])
+                    if isinstance(alt_contacts, list) and alt_contacts:
+                        with st.container():
+                            st.markdown("**👥 Other Key People:**")
+                            for alt in alt_contacts:
+                                alt_line = f"• **{alt.get('name', '')}** — {alt.get('title', '')}"
+                                if alt.get('email'):
+                                    alt_line += f" | {alt['email']}"
+                                if alt.get('linkedin'):
+                                    alt_line += f" | [LinkedIn]({alt['linkedin']})"
+                                st.markdown(alt_line)
                     
                     homework_notes = st.text_area(
                         "✏️ Your homework notes (2-3 things you noticed about their business)",

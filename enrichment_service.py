@@ -65,6 +65,7 @@ def search_outscraper_contacts(outscraper_key, domain):
 def search_apollo_people(api_key, domain):
     """
     Search Apollo for C-Suite, Founder, or Director level people for a specific domain.
+    Returns decision-maker info + company firmographics in one call.
     """
     url = "https://api.apollo.io/v1/mixed_people/search"
     headers = {
@@ -76,9 +77,10 @@ def search_apollo_people(api_key, domain):
     payload = {
         "api_key": api_key,
         "q_organization_domains": domain,
-        "person_titles": ["Managing Director", "Founder", "Owner", "Chief Executive Officer", "CEO", "President", "Director"],
+        "person_titles": ["Managing Director", "Founder", "Owner", "Chief Executive Officer", 
+                          "CEO", "President", "Director", "General Manager", "Principal"],
         "page": 1,
-        "per_page": 5 # We only need the top match
+        "per_page": 5
     }
     
     try:
@@ -94,14 +96,45 @@ def search_apollo_people(api_key, domain):
             # Grab the best match
             person = people[0]
             
-            return {
+            # Extract company/org data from the person's organization
+            org = person.get("organization", {}) or {}
+            
+            result = {
+                # Decision-maker data
                 "First Name": person.get("first_name", ""),
                 "Last Name": person.get("last_name", ""),
                 "Title": person.get("title", ""),
                 "LinkedIn": person.get("linkedin_url", ""),
                 "Email": person.get("email", ""),
-                "Headline": person.get("headline", "")
+                "Headline": person.get("headline", ""),
+                # Company firmographic data (from organization embedded in person)
+                "Company Name": org.get("name", ""),
+                "Company LinkedIn": org.get("linkedin_url", ""),
+                "Company Website": org.get("website_url", ""),
+                "Employee Count": org.get("estimated_num_employees") or org.get("num_employees") or "",
+                "Revenue": org.get("annual_revenue_printed", ""),
+                "Revenue Raw": org.get("annual_revenue") or "",
+                "Industry": org.get("industry", ""),
+                "Company Phone": org.get("phone", ""),
+                "Founded Year": org.get("founded_year", ""),
+                "City": org.get("city", ""),
+                "Country": org.get("country", ""),
+                "Short Description": org.get("short_description", ""),
             }
+            
+            # If we got multiple people, include them as alternates
+            if len(people) > 1:
+                alternates = []
+                for p in people[1:4]:  # Up to 3 alternates
+                    alternates.append({
+                        "name": f"{p.get('first_name', '')} {p.get('last_name', '')}".strip(),
+                        "title": p.get("title", ""),
+                        "email": p.get("email", ""),
+                        "linkedin": p.get("linkedin_url", "")
+                    })
+                result["Alternates"] = alternates
+            
+            return result
         else:
             return {"error": f"API Error: {response.text}"}
     except Exception as e:
