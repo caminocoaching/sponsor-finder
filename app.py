@@ -1894,32 +1894,38 @@ if current_tab == " Search & Add":
         # Only show columns that exist
         disp_cols = [c for c in disp_cols if c in df_results.columns]
             
-        st.dataframe(
+        event = st.dataframe(
                 df_results[disp_cols],
                 width="stretch",
                 column_config={
                     "Score": st.column_config.TextColumn("Quality", width="small", help="A 5-star lead = local business with a website, phone, good reviews, right size. Perfect sponsor candidate."),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
-                    "Socials": st.column_config.TextColumn("Social", width="small"),
-                    "Email": st.column_config.TextColumn("Email", width="medium"),
                     "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
                     "In List": st.column_config.TextColumn("Added", width="small"),
-                }
+                },
+                selection_mode="single-row",
+                on_select="rerun",
+                key="results_table"
         )
     
         
-        # Add to DB Logic
-        col_s1, col_s2 = st.columns([3, 1])
-        with col_s1:
-            add_choice = st.selectbox("Select result to track", df_results["Business Name"].unique())
-        with col_s2:
-            is_in_list = add_choice.lower() in existing_names
+        # Get selected row from table click
+        selected_rows = event.selection.rows if event and event.selection else []
+        
+        if selected_rows:
+            selected_idx = selected_rows[0]
+            add_choice = df_results.iloc[selected_idx]["Business Name"]
+            is_in_list = str(add_choice).lower() in existing_names
             
-            if st.button("➕ Add to My Leads", disabled=is_in_list):
-                if is_in_list:
-                    st.error("Already in your list!")
-                else:
-                    row = df_results[df_results["Business Name"] == add_choice].iloc[0]
+            col_s1, col_s2 = st.columns([3, 1])
+            with col_s1:
+                st.info(f"Selected: **{add_choice}**")
+            with col_s2:
+                if st.button("➕ Add to My Leads", disabled=is_in_list, use_container_width=True):
+                    if is_in_list:
+                        st.error("Already in your list!")
+                    else:
+                        row = df_results.iloc[selected_idx]
                     
                     b_name = row["Business Name"]
                     b_sect = row["Sector"]
