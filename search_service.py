@@ -6,7 +6,16 @@ import json
 import urllib.parse
 import streamlit as st # Added for debug feedback
 from outscraper import OutscraperClient # [NEW] Use official SDK
-from cache_manager import get_cached_search, set_cached_search # [NEW] Caching
+from cache_manager import get_cached_search, set_cached_search, clear_cache # [NEW] Caching
+
+# One-time cache purge on deploy to flush old non-enriched results
+import os
+_cache_version_file = os.path.join(".cache", "_v3e_cleared")
+if not os.path.exists(_cache_version_file):
+    clear_cache()
+    os.makedirs(".cache", exist_ok=True)
+    with open(_cache_version_file, "w") as f:
+        f.write("cleared")
 
 def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0, google_api_key=None):
     """
