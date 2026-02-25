@@ -2543,15 +2543,23 @@ if current_tab == "✉️ Outreach Assistant":
                     
                     r_c1, r_c2 = st.columns(2)
                     with r_c1:
-                        st.markdown("**🏛️ Company Registry**")
-                        oc_url = f"https://opencorporates.com/companies?q={urllib.parse.quote_plus(lead['Business Name'])}"
-                        st.markdown(f"[Search OpenCorporates]({oc_url})")
+                        st.markdown("**🏛️ Companies House**")
+                        ch_num = lead_notes_data.get('ch_company_number', '')
+                        if ch_num:
+                            ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}"
+                            st.markdown(f"• [View Company Filing]({ch_url})")
+                        else:
+                            ch_search = f"https://find-and-update.company-information.service.gov.uk/search?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                            st.markdown(f"• [Search Companies House]({ch_search})")
                         
                         st.markdown("**👔 LinkedIn**")
-                        google_link(f'site:linkedin.com/company "{lead["Business Name"]}"', "Company Page")
-                        google_link(f'site:linkedin.com/in "{lead["Business Name"]}"', "All Employees")
+                        li_company = f"https://www.linkedin.com/search/results/companies/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"• [Search Companies]({li_company})")
+                        li_people = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"• [Search People]({li_people})")
                         if clean_contact and has_contact:
-                            google_link(f'site:linkedin.com/in "{clean_contact}" "{lead["Business Name"]}"', f"Verify {clean_contact}")
+                            li_person = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote_plus(clean_contact)}"
+                            st.markdown(f"• [Find {clean_contact}]({li_person})")
                     
                     with r_c2:
                         st.markdown("**🌍 Web Search**")
@@ -2560,8 +2568,10 @@ if current_tab == "✉️ Outreach Assistant":
                         google_link(f'"{lead["Business Name"]}" after:2025-01-01', "Latest News")
                         
                         st.markdown("**👤 Facebook**")
-                        google_link(f'site:facebook.com "{lead["Business Name"]}"', "Company Page")
-                        google_link(f'site:facebook.com "{lead["Business Name"]}" "owner" OR "director"', "Find Owner")
+                        fb_company = f"https://www.facebook.com/search/pages/?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"• [Company Page]({fb_company})")
+                        fb_people = f"https://www.facebook.com/search/people/?q={urllib.parse.quote_plus(lead['Business Name'])}"
+                        st.markdown(f"• [Find Owner]({fb_people})")
 
             # --- STAGE 2: DISCOVERY CALL ---
             elif stage == "2. Discovery Call":
