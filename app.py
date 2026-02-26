@@ -3052,7 +3052,7 @@ if current_tab == "✉️ Outreach Assistant":
                     except: existing_notes = {}
                 if not isinstance(existing_notes, dict): existing_notes = {}
                 
-                contact_name = lead.get('Contact Name', '') or lead['Business Name']
+                contact_name = lead.get('Contact Name', '') or ''
                 # Strip Apollo-style title suffix: "Neil Wearing (Depot Manager)" → "Neil Wearing"
                 if "(" in contact_name:
                     contact_name = contact_name[:contact_name.index("(")].strip()
@@ -4333,7 +4333,7 @@ Best regards,
                         
                         for idx, lead_fu in enumerate(followup_leads):
                             notes = lead_fu['notes']
-                            contact_name_fu = lead_fu['contact'] or lead_fu['name']
+                            contact_name_fu = lead_fu['contact'] or ''
                             first_name_fu = contact_name_fu.split()[0] if contact_name_fu else "there"
                             
                             # Determine which template step they're on
