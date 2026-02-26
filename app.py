@@ -3237,6 +3237,17 @@ if current_tab == "✉️ Outreach Assistant":
 
 📝 **Note their answer below ↓**
 """)
+                    st.markdown("---")
+                    close_proposal_response = st.text_area("Did they want a proposal? Any comments:", value=existing_notes.get('close_proposal_response', ''), height=60, key="close_q1")
+                    close_cost_questions = st.text_area("Cost questions they asked:", value=existing_notes.get('close_cost_questions', ''), height=60, key="close_q2")
+                    close_timeline = st.text_area("Timeline to get on board:", value=existing_notes.get('close_timeline', ''), height=60, key="close_q3", placeholder="e.g. 'Need to run it past my business partner' / 'Budget frees up in April' / 'Can decide this week'")
+                    
+                    if st.button("💾 Save Closing Notes", key="save_close_notes"):
+                        existing_notes['close_proposal_response'] = close_proposal_response
+                        existing_notes['close_cost_questions'] = close_cost_questions
+                        existing_notes['close_timeline'] = close_timeline
+                        db.update_lead_notes(lead['id'], existing_notes)
+                        st.success("✅ Closing notes saved!")
                 
                 st.divider()
                 
