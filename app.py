@@ -2187,18 +2187,7 @@ if current_tab == " Search & Add":
         if "Size" not in df_results.columns:
             df_results["Size"] = "—"
         
-        # --- SOCIAL PRESENCE INDICATOR ---
-        if "Social" in df_results.columns:
-            def _social_icons(social_dict):
-                if not social_dict or not isinstance(social_dict, dict):
-                    return "❌ None"
-                icons = []
-                if social_dict.get("linkedin"): icons.append("🔗")
-                if social_dict.get("facebook"): icons.append("📘")
-                if social_dict.get("instagram"): icons.append("📸")
-                if social_dict.get("twitter"): icons.append("🐦")
-                return " ".join(icons) if icons else "❌ None"
-            df_results["Socials"] = df_results["Social"].apply(_social_icons)
+        # Social links come from website scraping (Stage 1), not from search
         
         # --- MAP DISPLAY (If lat/lon ok) ---
         if "lat" in df_results.columns:
@@ -2243,8 +2232,6 @@ if current_tab == " Search & Add":
             disp_cols.append("Reviews")
         if "Size" in df_results.columns:
             disp_cols.append("Size")
-        if "Socials" in df_results.columns:
-            disp_cols.append("Socials")
         if "Distance" in df_results.columns:
             disp_cols.append("Distance")
         
@@ -2258,7 +2245,7 @@ if current_tab == " Search & Add":
                     "Score": st.column_config.TextColumn("Quality", width="small", help="5-star = website ✓ phone ✓ local ✓ right size ✓ good rating ✓"),
                     "Reviews": st.column_config.NumberColumn("Reviews", width="small", help="Google Maps review count — indicates business size & reputation"),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
-                    "Socials": st.column_config.TextColumn("Socials", width="small", help="🔗=LinkedIn 📘=Facebook 📸=Instagram 🐦=Twitter"),
+
                     "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
                     "In List": st.column_config.TextColumn("Added", width="small"),
                 },
