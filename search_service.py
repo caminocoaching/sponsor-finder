@@ -379,8 +379,8 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                     except:
                         pass
         
-        # Sort by Quality (highest first), then Distance (closest first)
-        mapped_results.sort(key=lambda x: (-x.get("Quality", 0), x.get("Distance", 999.0)))
+        # Sort by Quality (highest first), then Reviews (most first), then Distance (closest first)
+        mapped_results.sort(key=lambda x: (-x.get("Quality", 0), -x.get("Reviews", 0), x.get("Distance", 999.0)))
             
         if skipped_dist > 0:
             print(f"Skipped {skipped_dist} results outside {radius} mile radius.")
