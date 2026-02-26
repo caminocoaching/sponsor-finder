@@ -2686,7 +2686,7 @@ if current_tab == "✉️ Outreach Assistant":
                     st.warning("⚠️ No contact found automatically. Follow the steps below to find the right person.")
                 
                 # ======================================
-                # STEP-BY-STEP RESEARCH WORKFLOW
+                # PROGRESSIVE RESEARCH WORKFLOW
                 # ======================================
                 biz_name_encoded = urllib.parse.quote_plus(lead['Business Name'])
                 is_uk = saved_country.upper() in ('UK', 'UNITED KINGDOM', 'GB', 'GREAT BRITAIN', 'ENGLAND', 'SCOTLAND', 'WALES', 'NORTHERN IRELAND', '')
@@ -2695,14 +2695,40 @@ if current_tab == "✉️ Outreach Assistant":
                 has_directors = bool(lead_notes_data.get('ch_directors') or lead_notes_data.get('ch_pscs'))
                 has_profile_url = bool(lead_notes_data.get('contact_url', '').startswith('http'))
                 
+                # Progress tracker
+                stage1_done = has_contact
+                stage2_done = has_contact and has_profile_url
+                stage3_done = stage2_done  # Stage 3 is research — considered done once you can access it
+                stages_complete = sum([stage1_done, stage2_done, stage3_done])
+                
+                # Safe defaults for variables defined inside stage branches
+                contact_url = lead_notes_data.get('contact_url', '')
+                contact_email = lead_notes_data.get('email', '')
+                contact_salutation = lead_notes_data.get('salutation', 'Mr')
+                
                 st.markdown("---")
                 st.markdown("##### 🔎 Research Steps — Find the Decision Maker")
                 
-                # --- STAGE 1: Find the Company & Directors ---
-                stage1_done = has_contact or has_directors
+                # Progress bar
+                progress_labels = ["1️⃣ Find Contact", "2️⃣ Find Profile", "3️⃣ Research", "4️⃣ Message"]
+                progress_cols = st.columns(4)
+                for i, label in enumerate(progress_labels):
+                    with progress_cols[i]:
+                        if i < stages_complete:
+                            st.markdown(f"✅ ~~{label}~~")
+                        elif i == stages_complete:
+                            st.markdown(f"👉 **{label}**")
+                        else:
+                            st.markdown(f"🔒 {label}")
+                
+                st.markdown("---")
+                
+                # ==========================================================
+                # STAGE 1: Find the Company & Directors (ALWAYS OPEN)
+                # ==========================================================
                 stage1_icon = "✅" if stage1_done else "🔍"
                 
-                with st.expander(f"{stage1_icon} **Stage 1: Find the Company & Directors**", expanded=True):
+                with st.expander(f"{stage1_icon} **Stage 1: Find the Company & Directors**", expanded=not stage1_done):
                     if has_directors:
                         ch_dirs = lead_notes_data.get('ch_directors', [])
                         ch_pscs = lead_notes_data.get('ch_pscs', [])
@@ -2779,15 +2805,49 @@ if current_tab == "✉️ Outreach Assistant":
                                     st.markdown(f"**[{label} →]({url})**")
                                 col_idx += 1
                     
-                    st.caption("💡 **Tip:** Find the MD, CEO, or Owner → type their name in the contact field below.")
+                    # --- CONTACT NAME INPUT (inside Stage 1) ---
+                    st.markdown("---")
+                    st.markdown("**👇 Found the decision maker? Enter their name below and click 'Set as Contact':**")
+                    
+                    s1_name_c1, s1_name_c2, s1_name_c3 = st.columns([3, 1, 1])
+                    with s1_name_c1:
+                        new_name = st.text_input("Contact Name", value=contact_name_raw, key=f"contact_name_input_{lead['id']}", placeholder="e.g. John Smith")
+                    with s1_name_c2:
+                        saved_salutation = lead_notes_data.get('salutation', 'Mr')
+                        sal_options = ["Mr", "Mrs", "Miss", "Ms", "Dr"]
+                        sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
+                        contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
+                    with s1_name_c3:
+                        st.write("")  # spacer
+                        st.write("")  # spacer
+                        if new_name and new_name != contact_name_raw:
+                            if st.button("✅ Set as Contact", key=f"btn_set_contact_{lead['id']}", type="primary", use_container_width=True):
+                                # Auto-fix ALL CAPS names from Companies House
+                                if new_name == new_name.upper():
+                                    new_name = new_name.title()
+                                db.update_lead_contact(lead['id'], new_name)
+                                save_notes = lead_notes_data.copy()
+                                save_notes['salutation'] = contact_salutation
+                                db.update_lead_notes(lead['id'], save_notes)
+                                st.toast(f"✅ Contact set: {contact_salutation} {new_name} → Stage 2 unlocked!")
+                                time.sleep(0.5)
+                                st.rerun()
+                        elif has_contact:
+                            st.success("✅ Set")
+                    
+                    if not has_contact:
+                        st.caption("💡 **Tip:** Find the MD, CEO, or Owner from the links above → type their name here.")
                 
-                # --- STAGE 2: Find the Director's Profile ---
-                if has_contact and clean_contact:
+                # ==========================================================
+                # STAGE 2: Find the Director's Profile (unlocks after Stage 1)
+                # ==========================================================
+                if stage1_done:
+                    stage2_icon = "✅" if stage2_done else "👤"
                     contact_encoded = urllib.parse.quote_plus(clean_contact)
                     contact_and_co = urllib.parse.quote_plus(f"{clean_contact} {lead['Business Name']}")
                     
-                    with st.expander(f"👤 **Stage 2: Find {clean_contact}'s Profile**", expanded=False):
-                        st.markdown(f"**Now find {clean_contact}'s profile to connect with them:**")
+                    with st.expander(f"{stage2_icon} **Stage 2: Find {clean_contact}'s Profile**", expanded=not stage2_done):
+                        st.markdown(f"**Find {clean_contact}'s profile to connect with them:**")
                         
                         s2_c1, s2_c2 = st.columns(2)
                         with s2_c1:
@@ -2798,98 +2858,102 @@ if current_tab == "✉️ Outreach Assistant":
                             st.markdown(f"🔎 **[X-ray: People at {lead['Business Name']} →]({li_xray})**")
                         
                         with s2_c2:
-                            google_news = f"https://www.google.com/search?q={contact_and_co}"
-                            st.markdown(f"📰 **[Google: {clean_contact} + {lead['Business Name']} →]({google_news})**")
+                            google_search = f"https://www.google.com/search?q={contact_and_co}"
+                            st.markdown(f"📰 **[Google: {clean_contact} + {lead['Business Name']} →]({google_search})**")
                             st.caption("Find articles, news, interviews")
                             
                             fb_person = f"https://www.facebook.com/search/people/?q={contact_encoded}"
                             st.markdown(f"📘 **[Facebook: {clean_contact} →]({fb_person})**")
                         
-                        st.caption("🎯 **Goal:** Find their LinkedIn profile → Send Connect Request → Use your message template")
+                        # --- PROFILE URL + EMAIL INPUT (inside Stage 2) ---
+                        st.markdown("---")
+                        st.markdown("**👇 Found their profile? Paste the URL and email below:**")
+                        
+                        s2_url_c1, s2_url_c2, s2_url_c3 = st.columns([3, 2, 1])
+                        with s2_url_c1:
+                            saved_url = lead_notes_data.get('contact_url', '')
+                            contact_url = st.text_input("Profile URL", value=saved_url, key=f"url_{lead['id']}", placeholder="LinkedIn, Facebook, or other profile URL")
+                        with s2_url_c2:
+                            saved_email = lead_notes_data.get('email', '')
+                            contact_email = st.text_input("Email", value=saved_email, key=f"email_{lead['id']}", placeholder="name@company.com")
+                        with s2_url_c3:
+                            st.write("")  # spacer
+                            st.write("")  # spacer
+                            url_or_email_changed = (contact_url != saved_url) or (contact_email != saved_email)
+                            if url_or_email_changed:
+                                if st.button("💾 Save Profile", key=f"btn_save_profile_{lead['id']}", type="primary", use_container_width=True):
+                                    save_notes = lead_notes_data.copy()
+                                    save_notes['contact_url'] = contact_url
+                                    save_notes['email'] = contact_email
+                                    save_notes['salutation'] = contact_salutation
+                                    db.update_lead_notes(lead['id'], save_notes)
+                                    st.toast(f"✅ Profile saved → Stage 3 unlocked!")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                            elif stage2_done:
+                                st.success("✅ Saved")
+                        
+                        if not stage2_done:
+                            st.caption("🎯 **Goal:** Find their LinkedIn or Facebook profile → paste the URL above → this unlocks Stage 3.")
                 else:
-                    with st.expander("👤 **Stage 2: Find Director's Profile** *(enter name first)*", expanded=False):
-                        st.caption("👆 Add a contact name from Stage 1, then search links will appear here.")
-                        li_people_generic = f"https://www.linkedin.com/search/results/people/?keywords={biz_name_encoded}"
-                        st.markdown(f"Or browse: **[People at {lead['Business Name']} on LinkedIn →]({li_people_generic})**")
+                    with st.expander("🔒 **Stage 2: Find Director's Profile**", expanded=False):
+                        st.info("👆 Set a contact name in Stage 1 to unlock this step.")
                 
-                # --- STAGE 3: Company Research (News, Sponsorship, Intel) ---
-                # Always unlocked — company research doesn't require a contact name
-                
-                with st.expander(f"📊 **Stage 3: Company Research & Intel**", expanded=False):
-                    biz_name = lead['Business Name']
-                    st.markdown(f"**Research {biz_name} before reaching out:**")
-                    
-                    r_c1, r_c2 = st.columns(2)
-                    with r_c1:
-                        st.markdown("**📰 News & Updates**")
-                        google_news = f"https://www.google.com/search?q={biz_name_encoded}+news&tbm=nws"
-                        st.markdown(f"[🔍 {biz_name} — Latest News →]({google_news})")
+                # ==========================================================
+                # STAGE 3: Company Research (unlocks after Stage 2)
+                # ==========================================================
+                if stage2_done:
+                    with st.expander(f"📊 **Stage 3: Company Research & Intel**", expanded=not stage3_done):
+                        biz_name = lead['Business Name']
+                        st.markdown(f"**Research {biz_name} before reaching out:**")
                         
-                        google_events = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+%22new+contract%22+OR+%22expansion%22+OR+%22award%22+OR+%22growth%22"
-                        st.markdown(f"[🏆 Awards, Contracts & Growth →]({google_events})")
+                        r_c1, r_c2 = st.columns(2)
+                        with r_c1:
+                            st.markdown("**📰 News & Updates**")
+                            google_news = f"https://www.google.com/search?q={biz_name_encoded}+news&tbm=nws"
+                            st.markdown(f"[🔍 {biz_name} — Latest News →]({google_news})")
+                            
+                            google_events = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+%22new+contract%22+OR+%22expansion%22+OR+%22award%22+OR+%22growth%22"
+                            st.markdown(f"[🏆 Awards, Contracts & Growth →]({google_events})")
+                            
+                            google_hiring = f"https://www.google.com/search?q={biz_name_encoded}+hiring+OR+recruitment+OR+jobs"
+                            st.markdown(f"[👥 Hiring & Expansion Signals →]({google_hiring})")
                         
-                        google_hiring = f"https://www.google.com/search?q={biz_name_encoded}+hiring+OR+recruitment+OR+jobs"
-                        st.markdown(f"[👥 Hiring & Expansion Signals →]({google_hiring})")
-                    
-                    with r_c2:
-                        st.markdown("**🏁 Sponsorship History**")
-                        google_sponsor = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+sponsor+OR+sponsorship+OR+partnership"
-                        st.markdown(f"[🤝 Past Sponsorships →]({google_sponsor})")
+                        with r_c2:
+                            st.markdown("**🏁 Sponsorship History**")
+                            google_sponsor = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+sponsor+OR+sponsorship+OR+partnership"
+                            st.markdown(f"[🤝 Past Sponsorships →]({google_sponsor})")
+                            
+                            google_charity = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+charity+OR+community+OR+%22corporate+social%22"
+                            st.markdown(f"[❤️ Community & Charity Work →]({google_charity})")
+                            
+                            if is_uk:
+                                ch_num = lead_notes_data.get('ch_company_number', '')
+                                if ch_num:
+                                    ch_filing = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}/filing-history"
+                                    st.markdown(f"[📋 Companies House Filings →]({ch_filing})")
                         
-                        google_charity = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+charity+OR+community+OR+%22corporate+social%22"
-                        st.markdown(f"[❤️ Community & Charity Work →]({google_charity})")
-                        
-                        if is_uk:
-                            ch_num = lead_notes_data.get('ch_company_number', '')
-                            if ch_num:
-                                ch_filing = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}/filing-history"
-                                st.markdown(f"[📋 Companies House Filings →]({ch_filing})")
-                    
-                    st.caption("💡 **Use this intel in your message:** mention their recent news, awards, or community work to show you've done your homework.")
-                
-                # Editable contact fields
-                st.caption("Edit contact details:")
-                edit_c1, edit_c2, edit_c3, edit_c4 = st.columns([2, 1, 2, 2])
-                with edit_c1:
-                    new_name = st.text_input("Contact Name", value=contact_name_raw, key=f"contact_name_input_{lead['id']}")
-                with edit_c2:
-                    saved_salutation = lead_notes_data.get('salutation', 'Mr')
-                    sal_options = ["Mr", "Mrs", "Miss", "Ms", "Dr"]
-                    sal_idx = sal_options.index(saved_salutation) if saved_salutation in sal_options else 0
-                    contact_salutation = st.selectbox("Title", sal_options, index=sal_idx, key=f"sal_{lead['id']}")
-                with edit_c3:
-                    saved_email = lead_notes_data.get('email', '')
-                    contact_email = st.text_input("Email", value=saved_email, key=f"email_{lead['id']}", placeholder="name@company.com")
-                with edit_c4:
-                    saved_url = lead_notes_data.get('contact_url', '')
-                    contact_url = st.text_input("Profile URL", value=saved_url, key=f"url_{lead['id']}", placeholder="LinkedIn, Facebook, or other profile URL")
-                
-                if new_name != contact_name_raw or contact_url != saved_url or contact_email != saved_email:
-                    if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
-                        if new_name:
-                            # Auto-fix ALL CAPS names from Companies House
-                            if new_name == new_name.upper():
-                                new_name = new_name.title()
-                            db.update_lead_contact(lead['id'], new_name)
-                            save_notes = lead_notes_data.copy()
-                            save_notes['salutation'] = contact_salutation
-                            save_notes['contact_url'] = contact_url
-                            save_notes['email'] = contact_email
-                            db.update_lead_notes(lead['id'], save_notes)
-                            st.toast(f"✅ Saved: {contact_salutation} {new_name}")
-                            time.sleep(0.5)
-                            st.rerun()
+                        st.caption("💡 **Use this intel in your message:** mention their recent news, awards, or community work to show you've done your homework.")
+                else:
+                    with st.expander("🔒 **Stage 3: Company Research & Intel**", expanded=False):
+                        if stage1_done:
+                            st.info("👆 Save a profile URL in Stage 2 to unlock company research.")
+                        else:
+                            st.info("👆 Complete Stages 1 & 2 first to unlock company research.")
                 
                 st.divider()
                 
                 # ============================================================
                 # STAGE 4: CONNECT & MESSAGE
                 # ============================================================
-                stage4_ready = has_contact and clean_contact
+                stage4_ready = stage2_done  # Ready once we have contact + profile
                 stage4_icon = "✉️" if stage4_ready else "🔒"
                 st.markdown(f"##### {stage4_icon} Stage 4: Connect & Message")
                 if not stage4_ready:
-                    st.info("👆 Complete Stages 1-3 to unlock messaging. Add a contact name and research the company first.")
+                    if not stage1_done:
+                        st.info("👆 Complete Stages 1-3 to unlock messaging. Start by finding a contact name.")
+                    elif not stage2_done:
+                        st.info("👆 Save a profile URL in Stage 2 to unlock messaging.")
                 else:
                     st.success(f"✅ Ready to contact **{clean_contact}** at **{lead['Business Name']}**")
                 
