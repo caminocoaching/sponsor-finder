@@ -3125,7 +3125,7 @@ if current_tab == "✉️ Outreach Assistant":
 
 *"{intro_line} and we're currently in the final stages of putting together our partner group for the {championship} season."*
 
-*"I want to be straight with you — this call isn't about asking for money. Before I even think about putting a proposal together, I want to make sure what we do actually makes sense for your business. So I'd love to ask you a few questions if that's okay — it'll only take about 10 minutes."*
+*"To be honest, I've only just started having these calls — up until now we've funded the racing through family and friends. But for me to achieve my goals this season, we need greater resources. Would it be okay if I ask you a few questions about your experience with sponsorship so far?"*
 
 ⏸️ **Wait for "yes" before continuing — this consent creates buy-in**
 """)
