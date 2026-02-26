@@ -1,4 +1,76 @@
 import requests
+import re
+
+
+def scrape_website_social_links(website_url):
+    """
+    Scrape a company's website to extract social media links from the HTML.
+    Looks for LinkedIn, Facebook, Instagram, Twitter/X, YouTube, TikTok URLs.
+    FREE — no API needed, just a simple HTTP GET.
+    
+    Returns dict: {"linkedin": "url", "facebook": "url", ...}
+    """
+    if not website_url:
+        return {}
+    
+    # Ensure URL has protocol
+    url = website_url.strip()
+    if not url.startswith("http"):
+        url = f"https://{url}"
+    
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        if resp.status_code != 200:
+            return {"error": f"Website returned {resp.status_code}"}
+        
+        html = resp.text
+        
+        # Extract all href values from the HTML
+        hrefs = re.findall(r'href=["\']([^"\']+)["\']', html, re.IGNORECASE)
+        
+        social = {}
+        
+        for href in hrefs:
+            href_lower = href.lower()
+            
+            # LinkedIn company page
+            if "linkedin.com/company/" in href_lower and "linkedin" not in social:
+                social["linkedin"] = href.split("?")[0]  # Strip tracking params
+            elif "linkedin.com/in/" in href_lower and "linkedin_person" not in social:
+                social["linkedin_person"] = href.split("?")[0]
+            
+            # Facebook
+            if "facebook.com/" in href_lower and "linkedin" not in href_lower and "facebook" not in social:
+                # Skip share/sharer links
+                if "sharer" not in href_lower and "share.php" not in href_lower:
+                    social["facebook"] = href.split("?")[0]
+            
+            # Instagram
+            if "instagram.com/" in href_lower and "instagram" not in social:
+                social["instagram"] = href.split("?")[0]
+            
+            # Twitter / X
+            if ("twitter.com/" in href_lower or "x.com/" in href_lower) and "twitter" not in social:
+                if "intent" not in href_lower and "share" not in href_lower:
+                    social["twitter"] = href.split("?")[0]
+            
+            # YouTube
+            if "youtube.com/" in href_lower and "youtube" not in social:
+                social["youtube"] = href.split("?")[0]
+            
+            # TikTok
+            if "tiktok.com/" in href_lower and "tiktok" not in social:
+                social["tiktok"] = href.split("?")[0]
+        
+        return social
+    
+    except requests.exceptions.Timeout:
+        return {"error": "Website took too long to respond"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def search_outscraper_contacts(outscraper_key, domain):
