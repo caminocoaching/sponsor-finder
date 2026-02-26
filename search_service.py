@@ -12,7 +12,7 @@ from cache_manager import get_cached_search, set_cached_search, clear_cache # [N
 
 # One-time cache purge on deploy to flush old non-enriched results
 import os
-_cache_version_file = os.path.join(".cache", "_v3e_cleared")
+_cache_version_file = os.path.join(".cache", "_v4_socials")
 if not os.path.exists(_cache_version_file):
     clear_cache()
     os.makedirs(".cache", exist_ok=True)
