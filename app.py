@@ -3150,7 +3150,7 @@ if current_tab == "✉️ Outreach Assistant":
                     # Q2 — Ideal Outcome
                     st.markdown("---")
                     st.markdown("**Q2 — Ideal Outcome** *(This becomes the headline of the proposal)*")
-                    st.markdown('*"If we did work together this season and it went really well — what would that actually look like for you?"*')
+                    st.markdown('*"What would success look like for you?"*')
                     st.caption("🎯 Listen for: their primary motivation. Probe: *'New customers, visibility, staff engagement, or entertaining clients?'*")
                     answers['ideal_outcome'] = st.text_area("Their answer:", value=existing_notes.get('ideal_outcome', ''), height=70, key="dq2")
                     
