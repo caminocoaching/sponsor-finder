@@ -2243,6 +2243,8 @@ if current_tab == " Search & Add":
             disp_cols.append("Reviews")
         if "Size" in df_results.columns:
             disp_cols.append("Size")
+        if "Socials" in df_results.columns:
+            disp_cols.append("Socials")
         if "Distance" in df_results.columns:
             disp_cols.append("Distance")
         
@@ -2256,6 +2258,7 @@ if current_tab == " Search & Add":
                     "Score": st.column_config.TextColumn("Quality", width="small", help="5-star = website ✓ phone ✓ local ✓ right size ✓ good rating ✓"),
                     "Reviews": st.column_config.NumberColumn("Reviews", width="small", help="Google Maps review count — indicates business size & reputation"),
                     "Size": st.column_config.TextColumn("Est. Size", width="small"),
+                    "Socials": st.column_config.TextColumn("Socials", width="small", help="🔗=LinkedIn 📘=Facebook 📸=Instagram 🐦=Twitter"),
                     "Distance": st.column_config.NumberColumn("Miles", format="%.1f", width="small"),
                     "In List": st.column_config.TextColumn("Added", width="small"),
                 },
