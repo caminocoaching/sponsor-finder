@@ -5,7 +5,9 @@ import random
 import json
 import urllib.parse
 import streamlit as st # Added for debug feedback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from outscraper import OutscraperClient # [NEW] Use official SDK
+from enrichment_service import scrape_website_social_links
 from cache_manager import get_cached_search, set_cached_search, clear_cache # [NEW] Caching
 
 # One-time cache purge on deploy to flush old non-enriched results
@@ -359,6 +361,24 @@ def search_outscraper(api_key, query, location_str, radius=50, limit=100, skip=0
                 "Is Chain": False
             })
             
+        # --- PARALLEL WEBSITE SCAN FOR SOCIAL LINKS ---
+        websites_to_scan = [(i, r['Website']) for i, r in enumerate(mapped_results) if r.get('Website')]
+        if websites_to_scan:
+            print(f"Scanning {len(websites_to_scan)} websites for social links...")
+            def _scan(args):
+                idx, url = args
+                return idx, scrape_website_social_links(url)
+            
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {executor.submit(_scan, item): item for item in websites_to_scan}
+                for future in as_completed(futures):
+                    try:
+                        idx, socials = future.result()
+                        if socials and not socials.get('error'):
+                            mapped_results[idx]['Social'] = socials
+                    except:
+                        pass
+        
         # Sort by Quality (highest first), then Distance (closest first)
         mapped_results.sort(key=lambda x: (-x.get("Quality", 0), x.get("Distance", 999.0)))
             
