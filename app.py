@@ -3154,33 +3154,33 @@ if current_tab == "✉️ Outreach Assistant":
                     st.caption("🎯 Listen for: their primary motivation. Probe: *'New customers, visibility, staff engagement, or entertaining clients?'*")
                     answers['ideal_outcome'] = st.text_area("Their answer:", value=existing_notes.get('ideal_outcome', ''), height=70, key="dq2")
                     
-                    # Q3 — What Matters Most
+                    # Q3 — Staff Angle
                     st.markdown("---")
-                    st.markdown("**Q3 — Most Important Elements**")
-                    st.markdown('*"If you were putting a package together, what would be the most important elements for you?"*')
-                    st.caption("🎯 Examples if stuck: logo on bike/kit, event hospitality, social media, B2B paddock intros, customer competitions, staff experiences")
-                    answers['important_elements'] = st.text_area("Their answer:", value=existing_notes.get('important_elements', ''), height=70, key="dq3")
-                    
-                    # Q4 — Staff Angle
-                    st.markdown("---")
-                    st.markdown("**Q4 — Staff & Team Benefit**")
+                    st.markdown("**Q3 — Staff & Team Benefit**")
                     st.markdown('*"Do you think your team could get something out of this — coming to a race, being part of something exciting?"*')
                     st.caption("🎯 Listen for: internal buy-in. If yes → *'What would they get most excited about?'*")
-                    answers['staff_angle'] = st.text_area("Their answer:", value=existing_notes.get('staff_angle', ''), height=70, key="dq4")
+                    answers['staff_angle'] = st.text_area("Their answer:", value=existing_notes.get('staff_angle', ''), height=70, key="dq3")
                     
-                    # Q5 — Customer Angle
+                    # Q4 — Customer Angle
                     st.markdown("---")
-                    st.markdown("**Q5 — Customer Benefit**")
+                    st.markdown("**Q4 — Customer Benefit**")
                     st.markdown('*"What about your customers — could you see using this as a promotion, loyalty reward, or memorable experience?"*')
                     st.caption("🎯 Listen for: commercial use case. If yes → *'Tell me more — what kind of customers?'*")
-                    answers['customer_angle'] = st.text_area("Their answer:", value=existing_notes.get('customer_angle', ''), height=70, key="dq5")
+                    answers['customer_angle'] = st.text_area("Their answer:", value=existing_notes.get('customer_angle', ''), height=70, key="dq4")
                     
-                    # Q6 — Local Activation
+                    # Q5 — Local Activation
                     st.markdown("---")
-                    st.markdown("**Q6 — Local Round / Activation**")
+                    st.markdown("**Q5 — Local Round / Activation**")
                     st.markdown('*"We have a round at [nearest circuit] this season. Is there anything you would want to do around that?"*')
                     st.caption("🎯 Listen for: activation appetite. If they light up, this is the centrepiece of the proposal.")
-                    answers['local_activation'] = st.text_area("Their answer:", value=existing_notes.get('local_activation', ''), height=70, key="dq6")
+                    answers['local_activation'] = st.text_area("Their answer:", value=existing_notes.get('local_activation', ''), height=70, key="dq5")
+                    
+                    # Q6 — Most Important Elements
+                    st.markdown("---")
+                    st.markdown("**Q6 — Most Important Elements**")
+                    st.markdown('*"If you were putting a package together, what would be the most important elements for you?"*')
+                    st.caption("🎯 Examples if stuck: logo on bike/kit, event hospitality, social media, B2B paddock intros, customer competitions, staff experiences")
+                    answers['important_elements'] = st.text_area("Their answer:", value=existing_notes.get('important_elements', ''), height=70, key="dq6")
                     
                     # Q7 — Budget Signals
                     st.markdown("---")
