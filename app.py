@@ -2813,43 +2813,39 @@ if current_tab == "✉️ Outreach Assistant":
                         st.markdown(f"Or browse: **[People at {lead['Business Name']} on LinkedIn →]({li_people_generic})**")
                 
                 # --- STAGE 3: Company Research (News, Sponsorship, Intel) ---
-                stage3_icon = "📊" if stage1_done else "🔒"
-                stage3_expanded = stage1_done and has_contact
+                # Always unlocked — company research doesn't require a contact name
                 
-                with st.expander(f"{stage3_icon} **Stage 3: Company Research & Intel**", expanded=False):
-                    if not stage1_done:
-                        st.caption("Complete Stage 1 first to unlock research links.")
-                    else:
-                        biz_name = lead['Business Name']
-                        st.markdown(f"**Research {biz_name} before reaching out:**")
+                with st.expander(f"📊 **Stage 3: Company Research & Intel**", expanded=False):
+                    biz_name = lead['Business Name']
+                    st.markdown(f"**Research {biz_name} before reaching out:**")
+                    
+                    r_c1, r_c2 = st.columns(2)
+                    with r_c1:
+                        st.markdown("**📰 News & Updates**")
+                        google_news = f"https://www.google.com/search?q={biz_name_encoded}+news&tbm=nws"
+                        st.markdown(f"[🔍 {biz_name} — Latest News →]({google_news})")
                         
-                        r_c1, r_c2 = st.columns(2)
-                        with r_c1:
-                            st.markdown("**📰 News & Updates**")
-                            google_news = f"https://www.google.com/search?q={biz_name_encoded}+news&tbm=nws"
-                            st.markdown(f"[🔍 {biz_name} — Latest News →]({google_news})")
-                            
-                            google_events = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+%22new+contract%22+OR+%22expansion%22+OR+%22award%22+OR+%22growth%22"
-                            st.markdown(f"[🏆 Awards, Contracts & Growth →]({google_events})")
-                            
-                            google_hiring = f"https://www.google.com/search?q={biz_name_encoded}+hiring+OR+recruitment+OR+jobs"
-                            st.markdown(f"[👥 Hiring & Expansion Signals →]({google_hiring})")
+                        google_events = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+%22new+contract%22+OR+%22expansion%22+OR+%22award%22+OR+%22growth%22"
+                        st.markdown(f"[🏆 Awards, Contracts & Growth →]({google_events})")
                         
-                        with r_c2:
-                            st.markdown("**🏁 Sponsorship History**")
-                            google_sponsor = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+sponsor+OR+sponsorship+OR+partnership"
-                            st.markdown(f"[🤝 Past Sponsorships →]({google_sponsor})")
-                            
-                            google_charity = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+charity+OR+community+OR+%22corporate+social%22"
-                            st.markdown(f"[❤️ Community & Charity Work →]({google_charity})")
-                            
-                            if is_uk:
-                                ch_num = lead_notes_data.get('ch_company_number', '')
-                                if ch_num:
-                                    ch_filing = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}/filing-history"
-                                    st.markdown(f"[📋 Companies House Filings →]({ch_filing})")
+                        google_hiring = f"https://www.google.com/search?q={biz_name_encoded}+hiring+OR+recruitment+OR+jobs"
+                        st.markdown(f"[👥 Hiring & Expansion Signals →]({google_hiring})")
+                    
+                    with r_c2:
+                        st.markdown("**🏁 Sponsorship History**")
+                        google_sponsor = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+sponsor+OR+sponsorship+OR+partnership"
+                        st.markdown(f"[🤝 Past Sponsorships →]({google_sponsor})")
                         
-                        st.caption("💡 **Use this intel in your message:** mention their recent news, awards, or community work to show you've done your homework.")
+                        google_charity = f"https://www.google.com/search?q=%22{biz_name_encoded}%22+charity+OR+community+OR+%22corporate+social%22"
+                        st.markdown(f"[❤️ Community & Charity Work →]({google_charity})")
+                        
+                        if is_uk:
+                            ch_num = lead_notes_data.get('ch_company_number', '')
+                            if ch_num:
+                                ch_filing = f"https://find-and-update.company-information.service.gov.uk/company/{ch_num}/filing-history"
+                                st.markdown(f"[📋 Companies House Filings →]({ch_filing})")
+                    
+                    st.caption("💡 **Use this intel in your message:** mention their recent news, awards, or community work to show you've done your homework.")
                 
                 # Editable contact fields
                 st.caption("Edit contact details:")
