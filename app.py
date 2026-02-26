@@ -2733,15 +2733,22 @@ if current_tab == "✉️ Outreach Assistant":
                         st.markdown(f"📘 **[Facebook Company →]({fb_company})**")
                         st.caption("Business page → About section")
                     
-                    # --- WEBSITE SOCIAL LINK SCRAPER ---
+                    # --- AUTO-SCAN WEBSITE FOR SOCIAL LINKS ---
                     website = lead.get('Website', '')
                     saved_socials = lead_notes_data.get('scraped_socials', {})
                     
                     if website:
-                        st.markdown("---")
+                        # Auto-scan if not already done
+                        if not saved_socials:
+                            socials = scrape_website_social_links(website)
+                            if socials and not socials.get('error'):
+                                saved_socials = socials
+                                lead_notes_data['scraped_socials'] = socials
+                                db.update_lead_notes(lead['id'], lead_notes_data)
+                        
                         if saved_socials and not saved_socials.get('error'):
-                            # Show previously scraped links
-                            st.markdown("**🌐 Social links found on their website:**")
+                            st.markdown("---")
+                            st.markdown("**🌐 Social links from their website:**")
                             icon_map = {
                                 "linkedin": "🔗 LinkedIn Company",
                                 "linkedin_person": "👤 LinkedIn Person", 
@@ -2760,21 +2767,6 @@ if current_tab == "✉️ Outreach Assistant":
                                 with soc_cols[col_idx % len(soc_cols)]:
                                     st.markdown(f"**[{label} →]({url})**")
                                 col_idx += 1
-                        
-                        if st.button("🌐 Scan Website for Social Links", key=f"scrape_social_{lead['id']}"):
-                            with st.spinner(f"Scanning {website}..."):
-                                socials = scrape_website_social_links(website)
-                            
-                            if socials.get("error"):
-                                st.warning(f"Could not scan: {socials['error']}")
-                            elif not socials:
-                                st.info("No social media links found on their website.")
-                            else:
-                                # Save to lead notes
-                                lead_notes_data['scraped_socials'] = socials
-                                db.update_lead_notes(lead['id'], lead_notes_data)
-                                st.success(f"Found {len(socials)} social links!")
-                                st.rerun()
                     
                     st.caption("💡 **Tip:** Find the MD, CEO, or Owner → type their name in the contact field below.")
                 
