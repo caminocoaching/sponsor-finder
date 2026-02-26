@@ -3210,16 +3210,32 @@ if current_tab == "✉️ Outreach Assistant":
                 
                 # ---- 3. THE SOFT CLOSE ----
                 with st.expander("3️⃣ Closing The Call (Script)", expanded=False):
+                    contact_first = clean_contact.split()[0] if clean_contact else "[Name]"
                     ideal = existing_notes.get('ideal_outcome', '[their goal]')
-                    p_date = existing_notes.get('proposal_send_date', '[specific day]')
                     st.markdown(f"""
-*"That's been really useful, thank you. Based on what you've said about {ideal}, I've actually got a couple of ideas already about how we could make that work."*
+*"Thank you, that's been really great — it gives me a brilliant picture of what your brand needs and I already have some ideas."*
 
-*"I'll put something together and send it over by **{p_date}**. It won't be long, just the key points so you can give me honest feedback on it."*
+*"It sounds like there could be a great opportunity here. Would you like me to go away and put a proposal together for you?"*
 
-*"When would work for a quick 10-minute call to go through it?"*
+⏸️ **Wait for "yes"**
 
-⚡ **Book it before you hang up**
+---
+
+💡 **If they ask "how much?" or other cost questions:**
+
+*"That's exactly what I'll work out in the proposal for you. I'll put together some options and then we can have a quick call when I send it over so I can walk you through everything. Does that sound good?"*
+
+⏸️ **Wait for "yes"**
+
+---
+
+📅 **The Timeline Close (critical — gets budget timing):**
+
+*"One last thing, {contact_first} — if you like the proposal and it meets your needs, what would the timeline be from there to get you on board?"*
+
+🎯 **Listen for:** *when their budget cycle is, who else needs to approve, any deadlines or season start dates*
+
+📝 **Note their answer below ↓**
 """)
                 
                 st.divider()
