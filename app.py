@@ -259,6 +259,32 @@ DISCOVERY_PROBES = {
 }
 
 OBJECTION_SCRIPTS = {
+    # --- POSITIVE INTEREST (guide toward a call) ---
+    "book a call": """Brilliant, really glad to hear that!
+
+Let's get something in the diary. I'm free [suggest 2-3 specific dates/times, e.g. Tuesday at 10am or Thursday at 2pm].
+
+It'll be a relaxed 10-15 minute chat — I'll walk you through how it works and we can see if there's a fit. No pressure either way.
+
+Which works best for you?""",
+
+    "warm interest": """That's great to hear, thanks for coming back to me!
+
+The best next step would be a quick 10-minute discovery call — just to understand what you're working toward this year and whether there's a genuine fit.
+
+No pitch, no commitment. Just a conversation.
+
+I'm available [suggest 2-3 dates/times]. Does any of those work for you?""",
+
+    "tell me more": """Of course! In a nutshell:
+
+Our partners get their brand in front of thousands of engaged motorsport fans per event — plus VIP hospitality, exclusive content for their marketing, and a genuine competitive edge over their competitors who aren't doing this.
+
+But honestly, the best way to see if there's a real fit is a quick 10-minute call. I can tailor everything to what matters most to your business.
+
+Are you free for a quick chat [suggest 2-3 dates/times]?""",
+
+    # --- OBJECTIONS ---
     "send email": """That’s absolutely fine, I can certainly send over some details. 
 
 However, sponsorship is really about fitting your specific needs, not a one-size-fits-all package. 
@@ -285,18 +311,50 @@ Many [Sector] companies find we offer a unique way to stand out compared to stan
 def handle_objection(reply_text):
     reply_lower = reply_text.lower()
     
-    # 1. Check for Positive Interest (Price/Cost questions)
+    # 1. Ready to book / strong positive — they want to proceed
+    book_phrases = ["let's do it", "let's go", "book a call", "book a chat", "set up a call",
+                    "arrange a call", "schedule a call", "when are you free", "when can we",
+                    "let's set something up", "put something in the diary", "get something booked",
+                    "happy to jump on a call", "i'm in", "count me in", "let's talk"]
+    if any(phrase in reply_lower for phrase in book_phrases):
+        return "book a call"
+    
+    # 2. Check negative intent BEFORE warm interest (avoid "interested" matching "not interested")
+    if "not interested" in reply_lower or "no thanks" in reply_lower or "no thank you" in reply_lower:
+        return "not interested"
+    
+    # 3. Warm interest — positive but not yet committed to a call
+    warm_phrases = ["sounds good", "sounds great", "sounds interesting", "that sounds",
+                    "yes", "yeah", "yep", "sure", "absolutely", "definitely",
+                    "i'd be open", "open to", "i'm open", "why not", "go on",
+                    "interested", "love to", "would love", "i'd love",
+                    "sounds like a plan", "i like the sound", "great idea",
+                    "brilliant", "awesome", "amazing", "perfect",
+                    "thanks for reaching out", "glad you reached out",
+                    "could work", "might work", "worth a chat", "worth exploring"]
+    if any(phrase in reply_lower for phrase in warm_phrases):
+        return "warm interest"
+    
+    # 4. Tell me more — curious but needs info before committing
+    info_phrases = ["tell me more", "more info", "more details", "more information",
+                    "what does it involve", "what's involved", "what would it look like",
+                    "how does it work", "how would it work", "what do you offer",
+                    "what are the options", "what packages", "what do partners get",
+                    "can you explain", "walk me through", "what exactly",
+                    "what would we get", "what's included", "what kind of"]
+    if any(phrase in reply_lower for phrase in info_phrases):
+        return "tell me more"
+    
+    # 5. Check for Price/Cost questions (strong buying signal)
     if "how much" in reply_lower or "price" in reply_lower or ("cost" in reply_lower and "expensive" not in reply_lower):
         return "how much"
         
-    # 2. Standard Objections
+    # 6. Standard Objections
     elif "email" in reply_lower or "send info" in reply_lower:
         return "send email"
     elif "budget" in reply_lower or "expensive" in reply_lower or "cost" in reply_lower:
         return "budget"
-    elif "not interested" in reply_lower or "no thanks" in reply_lower:
-        return "not interested"
-    elif "call" in reply_lower or "busy" in reply_lower or "later" in reply_lower:
+    elif "busy" in reply_lower or "later" in reply_lower or "not a good time" in reply_lower or "bad time" in reply_lower:
         return "call me later"
     else:
         return "fallback"
