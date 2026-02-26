@@ -425,9 +425,14 @@ def calendar_contact_card(lead_id):
         if contact_phone:
             st.markdown(f"📞 {contact_phone}")
         if contact_url:
-            st.markdown(f"🔗 [LinkedIn Profile →]({contact_url})")
+            if 'facebook' in contact_url.lower():
+                st.markdown(f"📘 [Facebook Profile →]({contact_url})")
+            elif 'linkedin' in contact_url.lower():
+                st.markdown(f"🔗 [LinkedIn Profile →]({contact_url})")
+            else:
+                st.markdown(f"🔗 [Profile →]({contact_url})")
         else:
-            st.caption("🔗 No LinkedIn URL")
+            st.caption("🔗 No profile URL")
     
     st.markdown("---")
     
@@ -2630,7 +2635,7 @@ if current_tab == "✉️ Outreach Assistant":
                 
                 has_contact = bool(clean_contact and clean_contact != lead['Business Name'])
                 has_email = bool(lead_notes_data.get('email'))
-                has_linkedin = bool(lead_notes_data.get('contact_url', '').startswith('http'))
+                has_profile_url = bool(lead_notes_data.get('contact_url', '').startswith('http'))
                 
                 # ============================================================
                 # SECTION 1: CONTACTS FOUND
@@ -2647,8 +2652,14 @@ if current_tab == "✉️ Outreach Assistant":
                     with pc2:
                         if has_email:
                             st.markdown(f"📧 {lead_notes_data['email']}")
-                        if has_linkedin:
-                            st.markdown(f"🔗 [LinkedIn Profile]({lead_notes_data['contact_url']})")
+                        if has_profile_url:
+                            profile_url = lead_notes_data['contact_url']
+                            if 'facebook' in profile_url.lower():
+                                st.markdown(f"📘 [Facebook Profile]({profile_url})")
+                            elif 'linkedin' in profile_url.lower():
+                                st.markdown(f"🔗 [LinkedIn Profile]({profile_url})")
+                            else:
+                                st.markdown(f"🔗 [Profile]({profile_url})")
                     with pc3:
                         st.success("Primary")
                     
@@ -2682,7 +2693,7 @@ if current_tab == "✉️ Outreach Assistant":
                 
                 # Determine what we already have
                 has_directors = bool(lead_notes_data.get('ch_directors') or lead_notes_data.get('ch_pscs'))
-                has_linkedin = bool(lead_notes_data.get('contact_url', '').startswith('http'))
+                has_profile_url = bool(lead_notes_data.get('contact_url', '').startswith('http'))
                 
                 st.markdown("---")
                 st.markdown("##### 🔎 Research Steps — Find the Decision Maker")
@@ -2855,7 +2866,7 @@ if current_tab == "✉️ Outreach Assistant":
                     contact_email = st.text_input("Email", value=saved_email, key=f"email_{lead['id']}", placeholder="name@company.com")
                 with edit_c4:
                     saved_url = lead_notes_data.get('contact_url', '')
-                    contact_url = st.text_input("LinkedIn URL", value=saved_url, key=f"url_{lead['id']}", placeholder="https://linkedin.com/in/...")
+                    contact_url = st.text_input("Profile URL", value=saved_url, key=f"url_{lead['id']}", placeholder="LinkedIn, Facebook, or other profile URL")
                 
                 if new_name != contact_name_raw or contact_url != saved_url or contact_email != saved_email:
                     if st.button("💾 Save Contact Details", key=f"btn_save_{lead['id']}"):
@@ -2886,8 +2897,14 @@ if current_tab == "✉️ Outreach Assistant":
                 else:
                     st.success(f"✅ Ready to contact **{clean_contact}** at **{lead['Business Name']}**")
                 
-                if has_linkedin:
-                    st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({lead_notes_data['contact_url']})**")
+                if has_profile_url:
+                    profile_link = lead_notes_data['contact_url']
+                    if 'facebook' in profile_link.lower():
+                        st.markdown(f"**👉 [Open Facebook Profile → Send Message]({profile_link})**")
+                    elif 'linkedin' in profile_link.lower():
+                        st.markdown(f"**👉 [Open LinkedIn Profile → Send Message]({profile_link})**")
+                    else:
+                        st.markdown(f"**👉 [Open Profile → Send Message]({profile_link})**")
                 
                 contact_name_for_msg = new_name if new_name else ""
                 town = saved_town
