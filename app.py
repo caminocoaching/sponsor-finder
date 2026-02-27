@@ -2351,252 +2351,252 @@ if current_tab == " Search & Add":
                     else:
                         row = df_results.iloc[selected_idx]
                     
-                    b_name = row["Business Name"]
-                    b_sect = row["Sector"]
-                    b_loc = row["Address"]
-                    b_web = row.get("Website", "")
-                    b_contact = row.get("Owner", "")  # Pre-fill contact from owner
-                    
-                    # Build enriched notes from search data
-                    enriched_notes = {}
-                    
-                    # --- PRIMARY ENRICHMENT: APOLLO (decision-maker + company data) ---
-                    apollo_key = st.session_state.user_profile.get("apollo_api_key", "") or st.secrets.get("apollo_api_key", "")
-                    apollo_found = False
-                    
-                    if apollo_key and b_web:
-                        st.toast(f"🔎 Searching Apollo for {b_name} decision maker...")
-                        domain = extract_domain(b_web)
-                        apollo_res = search_apollo_people(apollo_key, domain)
-
-                        if "error" not in apollo_res:
-                            apollo_found = True
-                            
-                            # Decision-maker data
-                            title_str = apollo_res.get('Title', '')
-                            name_str = f"{apollo_res.get('First Name', '')} {apollo_res.get('Last Name', '')}".strip()
-                            if name_str:
-                                b_contact = f"{name_str} ({title_str})" if title_str else name_str
-                                enriched_notes["owner"] = b_contact
-                                enriched_notes["owner_first"] = apollo_res.get('First Name', '')
-                                enriched_notes["owner_last"] = apollo_res.get('Last Name', '')
-                                enriched_notes["owner_title"] = title_str
-                                st.success(f"🎯 Decision Maker: **{b_contact}**")
-                            
-                            # Email
-                            if apollo_res.get('Email'):
-                                enriched_notes["email"] = apollo_res['Email']
-                                enriched_notes["emails"] = [apollo_res['Email']]
-                                st.success(f"📧 Email: {apollo_res['Email']}")
-                            
-                            # Personal LinkedIn
-                            if apollo_res.get('LinkedIn'):
-                                enriched_notes["contact_url"] = apollo_res['LinkedIn']
-                                enriched_notes["owner_linkedin"] = apollo_res['LinkedIn']
-                                st.success(f"🔗 LinkedIn: {apollo_res['LinkedIn']}")
-                            
-                            # Company LinkedIn page
-                            if apollo_res.get('Company LinkedIn'):
-                                enriched_notes["linkedin_company"] = apollo_res['Company LinkedIn']
-                                if not enriched_notes.get("contact_url"):
-                                    enriched_notes["contact_url"] = apollo_res['Company LinkedIn']
-                            
-                            # Company firmographic data
-                            if apollo_res.get('Employee Count'):
-                                emp = apollo_res['Employee Count']
-                                enriched_notes["employee_count"] = emp
-                                if isinstance(emp, (int, float)) and emp > 0:
-                                    if emp > 250: enriched_notes["company_size"] = f"Large ({emp} employees)"
-                                    elif emp > 50: enriched_notes["company_size"] = f"Medium ({emp} employees)"
-                                    elif emp > 10: enriched_notes["company_size"] = f"Small ({emp} employees)"
-                                    else: enriched_notes["company_size"] = f"Micro ({emp} employees)"
-                                    st.success(f"👥 Company Size: {emp} employees")
-                            
-                            if apollo_res.get('Revenue'):
-                                enriched_notes["revenue"] = apollo_res['Revenue']
-                                st.success(f"💰 Revenue: {apollo_res['Revenue']}")
-                            
-                            if apollo_res.get('Industry'):
-                                enriched_notes["industry"] = apollo_res['Industry']
-                            
-                            if apollo_res.get('Founded Year'):
-                                enriched_notes["founded_year"] = apollo_res['Founded Year']
-                            
-                            if apollo_res.get('Company Phone'):
-                                enriched_notes["company_phone"] = apollo_res['Company Phone']
-                            
-                            if apollo_res.get('Direct Phone'):
-                                enriched_notes["direct_phone"] = apollo_res['Direct Phone']
-                            
-                            if apollo_res.get('Short Description'):
-                                enriched_notes["description"] = apollo_res['Short Description']
-                            
-                            # Alternate contacts (other directors/managers)
-                            if apollo_res.get('Alternates'):
-                                enriched_notes["alternate_contacts"] = apollo_res['Alternates']
-                                alt_names = [f"{a['name']} ({a['title']})" for a in apollo_res['Alternates'] if a.get('name')]
-                                if alt_names:
-                                    st.info(f"👤 Also found: {', '.join(alt_names)}")
-                        else:
-                            st.warning(f"Apollo: {apollo_res.get('error', 'No results')}")
-                    
-                    # --- FALLBACK: OUTSCRAPER CONTACTS (if Apollo didn't find email) ---
-                    os_key = st.session_state.user_profile.get("outscraper_key", "")
-                    if os_key and b_web and not enriched_notes.get("email"):
-                        st.toast(f"🔎 Outscraper fallback for {b_name}...")
-                        domain = extract_domain(b_web)
-                        contact_res = search_outscraper_contacts(os_key, domain)
-
-                        if "error" not in contact_res:
-                            if contact_res.get("emails") and not enriched_notes.get("email"):
-                                enriched_notes["email"] = contact_res["emails"][0]
-                                enriched_notes["emails"] = contact_res["emails"]
-                                st.success(f"📧 Found email: {contact_res['emails'][0]}")
-
-                            if contact_res.get("phones") and not enriched_notes.get("phones"):
-                                enriched_notes["phones"] = contact_res["phones"]
-
-                            if contact_res.get("social"):
-                                existing_social = enriched_notes.get("social_links", {})
-                                if not isinstance(existing_social, dict):
-                                    existing_social = {}
-                                for k, v in contact_res["social"].items():
-                                    if v and not existing_social.get(k):
-                                        existing_social[k] = v
-                                enriched_notes["social_links"] = existing_social
-
-                            if contact_res.get("linkedin") and not enriched_notes.get("linkedin_company"):
-                                enriched_notes["linkedin_company"] = contact_res["linkedin"]
-                                if not enriched_notes.get("contact_url"):
-                                    enriched_notes["contact_url"] = contact_res["linkedin"]
-
-                            if contact_res.get("site_description") and not enriched_notes.get("description"):
-                                enriched_notes["description"] = contact_res["site_description"]
-
-                    if not b_contact and row.get("Owner"):
-                        enriched_notes["owner"] = row["Owner"]
-                    if row.get("Description") and not enriched_notes.get("description"):
-                        enriched_notes["description"] = row["Description"]
-                    if row.get("Social") and isinstance(row["Social"], dict):
-                        existing = enriched_notes.get("social_links", {})
-                        if not isinstance(existing, dict):
-                            existing = {}
-                        for k, v in row["Social"].items():
-                            if v and not existing.get(k):
-                                existing[k] = v
-                        if existing:
-                            enriched_notes["social_links"] = existing
-                    if row.get("Reviews"):
-                        enriched_notes["reviews_count"] = int(row["Reviews"])
-                    if row.get("Size") and not enriched_notes.get("company_size"):
-                        enriched_notes["company_size"] = row["Size"]
-                    if row.get("Quality"):
-                        enriched_notes["quality_score"] = int(row["Quality"])
-                    if row.get("Email") and not enriched_notes.get("email"):
-                        enriched_notes["email"] = row["Email"]
-                    if row.get("Emails") and isinstance(row["Emails"], list) and not enriched_notes.get("emails"):
-                        enriched_notes["emails"] = row["Emails"]
-
-                    # --- COMPANIES HOUSE (UK Directors/PSCs — FREE) ---
-                    ch_key = st.secrets.get("companies_house_api_key", "")
-                    if ch_key and b_name:
-                        st.toast(f"🏛️ Checking Companies House for {b_name}...")
-                        ch_res = search_companies_house(ch_key, b_name)
+                        b_name = row["Business Name"]
+                        b_sect = row["Sector"]
+                        b_loc = row["Address"]
+                        b_web = row.get("Website", "")
+                        b_contact = row.get("Owner", "")  # Pre-fill contact from owner
                         
-                        if "error" not in ch_res:
-                            # Save company data
-                            if ch_res.get("company_number"):
-                                enriched_notes["ch_company_number"] = ch_res["company_number"]
-                                enriched_notes["ch_company_name"] = ch_res.get("company_name", "")
-                            if ch_res.get("sic_codes"):
-                                enriched_notes["sic_codes"] = ch_res["sic_codes"]
-                            if ch_res.get("registered_address"):
-                                enriched_notes["ch_address"] = ch_res["registered_address"]
-                            
-                            # Save directors list
-                            if ch_res.get("directors"):
-                                enriched_notes["ch_directors"] = [
-                                    {"name": d["name"], "role": d["role"]} 
-                                    for d in ch_res["directors"]
-                                ]
-                            
-                            # Save PSCs (owners)
-                            if ch_res.get("pscs"):
-                                enriched_notes["ch_pscs"] = [
-                                    {"name": p["name"]} for p in ch_res["pscs"]
-                                ]
-                            
-                            # Use CH best contact if Apollo didn't find one
-                            if ch_res.get("best_contact") and not b_contact:
-                                b_contact = ch_res["best_contact"]
-                                enriched_notes["owner"] = b_contact
-                                
-                                # Determine title from CH data
-                                ch_title = "Director"
-                                if ch_res.get("pscs"):
-                                    ch_title = "Owner (PSC)"
-                                for d in ch_res.get("directors", []):
-                                    if d["name"] == ch_res["best_contact"]:
-                                        ch_title = d.get("role", "Director").replace("-", " ").title()
-                                        break
-                                
-                                enriched_notes["owner_title"] = ch_title
-                                b_contact = f"{ch_res['best_contact']} ({ch_title})"
-                                st.success(f"🏛️ Companies House: **{b_contact}**")
-                            
-                            # Show other directors found
-                            all_people = []
-                            for p in ch_res.get("pscs", []):
-                                if p["name"] != ch_res.get("best_contact"):
-                                    all_people.append(f"{p['name']} (Owner)")
-                            for d in ch_res.get("directors", []):
-                                if d["name"] != ch_res.get("best_contact"):
-                                    role_label = d.get("role", "").replace("-", " ").title()
-                                    all_people.append(f"{d['name']} ({role_label})")
-                            if all_people:
-                                st.info(f"🏛️ Also registered: {', '.join(all_people[:3])}")
-                        else:
-                            st.caption(f"Companies House: {ch_res.get('error', 'No results')}")
+                        # Build enriched notes from search data
+                        enriched_notes = {}
+                        
+                        # --- PRIMARY ENRICHMENT: APOLLO (decision-maker + company data) ---
+                        apollo_key = st.session_state.user_profile.get("apollo_api_key", "") or st.secrets.get("apollo_api_key", "")
+                        apollo_found = False
+                        
+                        if apollo_key and b_web:
+                            st.toast(f"🔎 Searching Apollo for {b_name} decision maker...")
+                            domain = extract_domain(b_web)
+                            apollo_res = search_apollo_people(apollo_key, domain)
 
-                    # --- LINKEDIN COMPANY PAGE LOOKUP (only if nothing found yet) ---
-                    has_linkedin = enriched_notes.get("linkedin_company") or \
-                                   enriched_notes.get("contact_url", "").startswith("http") or \
-                                   (enriched_notes.get("social_links", {}).get("linkedin") if isinstance(enriched_notes.get("social_links"), dict) else False)
-                    if not has_linkedin:
+                            if "error" not in apollo_res:
+                                apollo_found = True
+                                
+                                # Decision-maker data
+                                title_str = apollo_res.get('Title', '')
+                                name_str = f"{apollo_res.get('First Name', '')} {apollo_res.get('Last Name', '')}".strip()
+                                if name_str:
+                                    b_contact = f"{name_str} ({title_str})" if title_str else name_str
+                                    enriched_notes["owner"] = b_contact
+                                    enriched_notes["owner_first"] = apollo_res.get('First Name', '')
+                                    enriched_notes["owner_last"] = apollo_res.get('Last Name', '')
+                                    enriched_notes["owner_title"] = title_str
+                                    st.success(f"🎯 Decision Maker: **{b_contact}**")
+                                
+                                # Email
+                                if apollo_res.get('Email'):
+                                    enriched_notes["email"] = apollo_res['Email']
+                                    enriched_notes["emails"] = [apollo_res['Email']]
+                                    st.success(f"📧 Email: {apollo_res['Email']}")
+                                
+                                # Personal LinkedIn
+                                if apollo_res.get('LinkedIn'):
+                                    enriched_notes["contact_url"] = apollo_res['LinkedIn']
+                                    enriched_notes["owner_linkedin"] = apollo_res['LinkedIn']
+                                    st.success(f"🔗 LinkedIn: {apollo_res['LinkedIn']}")
+                                
+                                # Company LinkedIn page
+                                if apollo_res.get('Company LinkedIn'):
+                                    enriched_notes["linkedin_company"] = apollo_res['Company LinkedIn']
+                                    if not enriched_notes.get("contact_url"):
+                                        enriched_notes["contact_url"] = apollo_res['Company LinkedIn']
+                                
+                                # Company firmographic data
+                                if apollo_res.get('Employee Count'):
+                                    emp = apollo_res['Employee Count']
+                                    enriched_notes["employee_count"] = emp
+                                    if isinstance(emp, (int, float)) and emp > 0:
+                                        if emp > 250: enriched_notes["company_size"] = f"Large ({emp} employees)"
+                                        elif emp > 50: enriched_notes["company_size"] = f"Medium ({emp} employees)"
+                                        elif emp > 10: enriched_notes["company_size"] = f"Small ({emp} employees)"
+                                        else: enriched_notes["company_size"] = f"Micro ({emp} employees)"
+                                        st.success(f"👥 Company Size: {emp} employees")
+                                
+                                if apollo_res.get('Revenue'):
+                                    enriched_notes["revenue"] = apollo_res['Revenue']
+                                    st.success(f"💰 Revenue: {apollo_res['Revenue']}")
+                                
+                                if apollo_res.get('Industry'):
+                                    enriched_notes["industry"] = apollo_res['Industry']
+                                
+                                if apollo_res.get('Founded Year'):
+                                    enriched_notes["founded_year"] = apollo_res['Founded Year']
+                                
+                                if apollo_res.get('Company Phone'):
+                                    enriched_notes["company_phone"] = apollo_res['Company Phone']
+                                
+                                if apollo_res.get('Direct Phone'):
+                                    enriched_notes["direct_phone"] = apollo_res['Direct Phone']
+                                
+                                if apollo_res.get('Short Description'):
+                                    enriched_notes["description"] = apollo_res['Short Description']
+                                
+                                # Alternate contacts (other directors/managers)
+                                if apollo_res.get('Alternates'):
+                                    enriched_notes["alternate_contacts"] = apollo_res['Alternates']
+                                    alt_names = [f"{a['name']} ({a['title']})" for a in apollo_res['Alternates'] if a.get('name')]
+                                    if alt_names:
+                                        st.info(f"👤 Also found: {', '.join(alt_names)}")
+                            else:
+                                st.warning(f"Apollo: {apollo_res.get('error', 'No results')}")
+                        
+                        # --- FALLBACK: OUTSCRAPER CONTACTS (if Apollo didn't find email) ---
                         os_key = st.session_state.user_profile.get("outscraper_key", "")
-                        if os_key:
-                            st.toast(f"🔗 Searching LinkedIn company page for {b_name}...")
-                            li_url = find_linkedin_company_page(os_key, b_name, b_loc)
-                            if li_url:
-                                enriched_notes["linkedin_company"] = li_url
-                                if not enriched_notes.get("contact_url"):
-                                    enriched_notes["contact_url"] = li_url
-                                st.success(f"🔗 Found LinkedIn: {li_url}")
+                        if os_key and b_web and not enriched_notes.get("email"):
+                            st.toast(f"🔎 Outscraper fallback for {b_name}...")
+                            domain = extract_domain(b_web)
+                            contact_res = search_outscraper_contacts(os_key, domain)
 
-                    notes_json = json.dumps(enriched_notes) if enriched_notes else "{}"
-                    
-                    try:
-                        new_lead_id = db.add_lead(
-                            st.session_state.user_id, b_name, b_sect, b_loc, 
-                            website=b_web, contact_name=b_contact, notes_json=notes_json
-                        )
-                    except Exception as e:
-                        st.error(f"Critical Error in add_lead: {e}")
-                        new_lead_id = None
+                            if "error" not in contact_res:
+                                if contact_res.get("emails") and not enriched_notes.get("email"):
+                                    enriched_notes["email"] = contact_res["emails"][0]
+                                    enriched_notes["emails"] = contact_res["emails"]
+                                    st.success(f"📧 Found email: {contact_res['emails'][0]}")
+
+                                if contact_res.get("phones") and not enriched_notes.get("phones"):
+                                    enriched_notes["phones"] = contact_res["phones"]
+
+                                if contact_res.get("social"):
+                                    existing_social = enriched_notes.get("social_links", {})
+                                    if not isinstance(existing_social, dict):
+                                        existing_social = {}
+                                    for k, v in contact_res["social"].items():
+                                        if v and not existing_social.get(k):
+                                            existing_social[k] = v
+                                    enriched_notes["social_links"] = existing_social
+
+                                if contact_res.get("linkedin") and not enriched_notes.get("linkedin_company"):
+                                    enriched_notes["linkedin_company"] = contact_res["linkedin"]
+                                    if not enriched_notes.get("contact_url"):
+                                        enriched_notes["contact_url"] = contact_res["linkedin"]
+
+                                if contact_res.get("site_description") and not enriched_notes.get("description"):
+                                    enriched_notes["description"] = contact_res["site_description"]
+
+                        if not b_contact and row.get("Owner"):
+                            enriched_notes["owner"] = row["Owner"]
+                        if row.get("Description") and not enriched_notes.get("description"):
+                            enriched_notes["description"] = row["Description"]
+                        if row.get("Social") and isinstance(row["Social"], dict):
+                            existing = enriched_notes.get("social_links", {})
+                            if not isinstance(existing, dict):
+                                existing = {}
+                            for k, v in row["Social"].items():
+                                if v and not existing.get(k):
+                                    existing[k] = v
+                            if existing:
+                                enriched_notes["social_links"] = existing
+                        if row.get("Reviews"):
+                            enriched_notes["reviews_count"] = int(row["Reviews"])
+                        if row.get("Size") and not enriched_notes.get("company_size"):
+                            enriched_notes["company_size"] = row["Size"]
+                        if row.get("Quality"):
+                            enriched_notes["quality_score"] = int(row["Quality"])
+                        if row.get("Email") and not enriched_notes.get("email"):
+                            enriched_notes["email"] = row["Email"]
+                        if row.get("Emails") and isinstance(row["Emails"], list) and not enriched_notes.get("emails"):
+                            enriched_notes["emails"] = row["Emails"]
+
+                        # --- COMPANIES HOUSE (UK Directors/PSCs — FREE) ---
+                        ch_key = st.secrets.get("companies_house_api_key", "")
+                        if ch_key and b_name:
+                            st.toast(f"🏛️ Checking Companies House for {b_name}...")
+                            ch_res = search_companies_house(ch_key, b_name)
+                            
+                            if "error" not in ch_res:
+                                # Save company data
+                                if ch_res.get("company_number"):
+                                    enriched_notes["ch_company_number"] = ch_res["company_number"]
+                                    enriched_notes["ch_company_name"] = ch_res.get("company_name", "")
+                                if ch_res.get("sic_codes"):
+                                    enriched_notes["sic_codes"] = ch_res["sic_codes"]
+                                if ch_res.get("registered_address"):
+                                    enriched_notes["ch_address"] = ch_res["registered_address"]
+                                
+                                # Save directors list
+                                if ch_res.get("directors"):
+                                    enriched_notes["ch_directors"] = [
+                                        {"name": d["name"], "role": d["role"]} 
+                                        for d in ch_res["directors"]
+                                    ]
+                                
+                                # Save PSCs (owners)
+                                if ch_res.get("pscs"):
+                                    enriched_notes["ch_pscs"] = [
+                                        {"name": p["name"]} for p in ch_res["pscs"]
+                                    ]
+                                
+                                # Use CH best contact if Apollo didn't find one
+                                if ch_res.get("best_contact") and not b_contact:
+                                    b_contact = ch_res["best_contact"]
+                                    enriched_notes["owner"] = b_contact
+                                    
+                                    # Determine title from CH data
+                                    ch_title = "Director"
+                                    if ch_res.get("pscs"):
+                                        ch_title = "Owner (PSC)"
+                                    for d in ch_res.get("directors", []):
+                                        if d["name"] == ch_res["best_contact"]:
+                                            ch_title = d.get("role", "Director").replace("-", " ").title()
+                                            break
+                                    
+                                    enriched_notes["owner_title"] = ch_title
+                                    b_contact = f"{ch_res['best_contact']} ({ch_title})"
+                                    st.success(f"🏛️ Companies House: **{b_contact}**")
+                                
+                                # Show other directors found
+                                all_people = []
+                                for p in ch_res.get("pscs", []):
+                                    if p["name"] != ch_res.get("best_contact"):
+                                        all_people.append(f"{p['name']} (Owner)")
+                                for d in ch_res.get("directors", []):
+                                    if d["name"] != ch_res.get("best_contact"):
+                                        role_label = d.get("role", "").replace("-", " ").title()
+                                        all_people.append(f"{d['name']} ({role_label})")
+                                if all_people:
+                                    st.info(f"🏛️ Also registered: {', '.join(all_people[:3])}")
+                            else:
+                                st.caption(f"Companies House: {ch_res.get('error', 'No results')}")
+
+                        # --- LINKEDIN COMPANY PAGE LOOKUP (only if nothing found yet) ---
+                        has_linkedin = enriched_notes.get("linkedin_company") or \
+                                       enriched_notes.get("contact_url", "").startswith("http") or \
+                                       (enriched_notes.get("social_links", {}).get("linkedin") if isinstance(enriched_notes.get("social_links"), dict) else False)
+                        if not has_linkedin:
+                            os_key = st.session_state.user_profile.get("outscraper_key", "")
+                            if os_key:
+                                st.toast(f"🔗 Searching LinkedIn company page for {b_name}...")
+                                li_url = find_linkedin_company_page(os_key, b_name, b_loc)
+                                if li_url:
+                                    enriched_notes["linkedin_company"] = li_url
+                                    if not enriched_notes.get("contact_url"):
+                                        enriched_notes["contact_url"] = li_url
+                                    st.success(f"🔗 Found LinkedIn: {li_url}")
+
+                        notes_json = json.dumps(enriched_notes) if enriched_notes else "{}"
                         
-                    if new_lead_id:
-                        quality_msg = f" (Quality: {'⭐' * int(row.get('Quality', 0))})" if row.get("Quality") else ""
-                        st.toast(f"✅ Added {add_choice}{quality_msg} — Opening Outreach Assistant...")
-                        
-                        # Auto-switch to Outreach Assistant
-                        st.session_state.selected_lead_id = new_lead_id
-                        st.session_state.requested_tab = "✉️ Outreach Assistant"
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.warning("Could not add lead. See error message above.")
+                        try:
+                            new_lead_id = db.add_lead(
+                                st.session_state.user_id, b_name, b_sect, b_loc, 
+                                website=b_web, contact_name=b_contact, notes_json=notes_json
+                            )
+                        except Exception as e:
+                            st.error(f"Critical Error in add_lead: {e}")
+                            new_lead_id = None
+                            
+                        if new_lead_id:
+                            quality_msg = f" (Quality: {'⭐' * int(row.get('Quality', 0))})" if row.get("Quality") else ""
+                            st.toast(f"✅ Added {add_choice}{quality_msg} — Opening Outreach Assistant...")
+                            
+                            # Auto-switch to Outreach Assistant
+                            st.session_state.selected_lead_id = new_lead_id
+                            st.session_state.requested_tab = "✉️ Outreach Assistant"
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.warning("Could not add lead. See error message above.")
                 if is_in_list:
-                    st.caption("Detailed marked as added.")
+                    st.caption("✅ Already in your outreach list.")
 
 # TAB 2: OUTREACH
 # TAB 2: OUTREACH

@@ -378,9 +378,31 @@ class AirtableManager:
     def add_lead(self, user_email, lead_data):
         """
         Adds a new lead for the user.
+        Checks for duplicates by business name before creating.
         """
         if not self.is_configured():
             return False
+
+        # --- DUPLICATE CHECK ---
+        biz_name = lead_data.get("Business Name", "")
+        if biz_name:
+            at_email_col = self.FIELD_MAP.get("User Email", "user email")
+            at_biz_col = self.FIELD_MAP.get("Business Name", "business name")
+            filter_formula = f"AND({{{at_email_col}}} = '{user_email}', {{{at_biz_col}}} = '{biz_name}')"
+            try:
+                response = requests.get(
+                    self._get_url(),
+                    headers=self.headers,
+                    params={"filterByFormula": filter_formula, "maxRecords": 1}
+                )
+                response.raise_for_status()
+                existing = response.json().get("records", [])
+                if existing:
+                    # Already exists — return False (duplicate)
+                    return False
+            except Exception as e:
+                # If the check fails, log but continue with the add
+                print(f"Airtable duplicate check warning: {e}")
 
         # Validate Last Contact (Airtable DATE field cannot take "Never")
         lc = lead_data.get("Last Contact", "")
@@ -394,7 +416,6 @@ class AirtableManager:
         else:
             notes_str = str(notes_input)
 
-        # Prepare payload with MAPPED keys
         # Prepare payload with MAPPED keys
         # Verify field exists in map before adding
         fields = {}
