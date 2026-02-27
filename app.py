@@ -1347,7 +1347,6 @@ if "google_cloud_key" in user_profile and "google_sheet_url" in user_profile:
 
 # --- MAIN APP (LOGGED IN & ONBOARDED) ---
 with st.sidebar:
-    st.caption("v2.5 (Search Upgrade)")
     st.caption(f"Logged in as: {user_data['email']}")
     if st.button("Logout"):
         st.session_state.user_id = None
@@ -1468,13 +1467,19 @@ with st.sidebar:
             st.warning("⚖️ Compliance Note: Use Outscraper to collect **Public Business Data** only (B2B). Avoid extracting private personal details to maintain GDPR/CCPA safety.", icon="🛡️")
              
             # Apollo Key Logic
+            system_apollo_key = st.secrets.get("apollo_api_key", "")
             saved_apollo_key = st.session_state.user_profile.get("apollo_api_key", "")
-            apollo_key = st.text_input("Apollo.io API Key (Optional)", value=saved_apollo_key, type="password", help="Used to automatically find the Managing Director / CEO on save.")
-            if apollo_key:
-                 st.session_state.user_profile["apollo_api_key"] = apollo_key
-                 if apollo_key != saved_apollo_key:
-                     db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
-                     st.toast("Apollo Key Saved!")
+            
+            if system_apollo_key and (not saved_apollo_key or saved_apollo_key == system_apollo_key):
+                st.success("✅ Apollo.io Key is managed by the system (Shared Key active).")
+                st.session_state.user_profile["apollo_api_key"] = system_apollo_key
+            else:
+                apollo_key = st.text_input("Apollo.io API Key (Optional)", value=saved_apollo_key, type="password", help="Used to automatically find the Managing Director / CEO on save.")
+                if apollo_key:
+                     st.session_state.user_profile["apollo_api_key"] = apollo_key
+                     if apollo_key != saved_apollo_key:
+                         db.save_user_profile(st.session_state.user_email, st.session_state.user_name, st.session_state.user_profile)
+                         st.toast("Apollo Key Saved!")
 
     
     if airtable_manager.is_configured():
@@ -2578,7 +2583,8 @@ if current_tab == " Search & Add":
                         try:
                             new_lead_id = db.add_lead(
                                 st.session_state.user_id, b_name, b_sect, b_loc, 
-                                website=b_web, contact_name=b_contact, notes_json=notes_json
+                                website=b_web, contact_name=b_contact, notes_json=notes_json,
+                                status="Active"
                             )
                         except Exception as e:
                             st.error(f"Critical Error in add_lead: {e}")

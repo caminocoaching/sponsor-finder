@@ -440,8 +440,8 @@ class AirtableManager:
         
         for app_key, val in mappings:
             # ONLY add if mapped and the column actually exists in our hardcoded map
-            # (We assume the hardcoded map matches Airtable, which we are editing now)
-            if app_key in self.FIELD_MAP:
+            # Skip None values — Airtable date fields reject null
+            if app_key in self.FIELD_MAP and val is not None:
                  fields[self.FIELD_MAP[app_key]] = val
 
         payload = {
