@@ -197,7 +197,8 @@ class AirtableManager:
         """
         if not self.is_configured(): return None
         
-        filter_formula = f"{{Email}} = '{email}'"
+        safe_email = email.strip()
+        filter_formula = f"LOWER(TRIM({{Email}})) = LOWER('{safe_email}')"
         params = {"filterByFormula": filter_formula}
         
         try:
@@ -211,7 +212,25 @@ class AirtableManager:
             records = data.get("records", [])
             
             if records:
+                # If multiple records match (duplicates), prefer the one
+                # with Onboarding Complete = True (fully set up profile)
                 r = records[0]
+                if len(records) > 1:
+                    for candidate in records:
+                        c_fields = candidate.get("fields", {})
+                        if c_fields.get("Onboarding Complete") == True:
+                            r = candidate
+                            break
+                        # Also check Profile JSON for onboarding_complete
+                        try:
+                            pj = json.loads(c_fields.get("Profile JSON", "{}"))
+                            if pj.get("onboarding_complete") == True:
+                                r = candidate
+                                break
+                        except:
+                            pass
+                    print(f"  ⚠️ Found {len(records)} duplicate User records for '{email}'. Using the onboarded one.")
+                
                 fields = r.get("fields", {})
                 profile = self._parse_profile_from_fields(fields)
                     
@@ -311,10 +330,11 @@ class AirtableManager:
         if not self.is_configured():
             return []
 
-        # Formula: {user email} = 'user_email'
+        # Formula: case-insensitive match with whitespace trimming
         # Note: We must use the mapped AIRTABLE column name here
         at_col = self.FIELD_MAP["User Email"]
-        filter_formula = f"{{{at_col}}} = '{user_email}'"
+        safe_email = user_email.strip()
+        filter_formula = f"LOWER(TRIM({{{at_col}}})) = LOWER('{safe_email}')"
         params = {
             "filterByFormula": filter_formula
         }
@@ -388,7 +408,8 @@ class AirtableManager:
         if biz_name:
             at_email_col = self.FIELD_MAP.get("User Email", "user email")
             at_biz_col = self.FIELD_MAP.get("Business Name", "business name")
-            filter_formula = f"AND({{{at_email_col}}} = '{user_email}', {{{at_biz_col}}} = '{biz_name}')"
+            safe_email = user_email.strip()
+            filter_formula = f"AND(LOWER(TRIM({{{at_email_col}}})) = LOWER('{safe_email}'), LOWER(TRIM({{{at_biz_col}}})) = LOWER('{biz_name}'))"
             try:
                 response = requests.get(
                     self._get_url(),
