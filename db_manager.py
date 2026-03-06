@@ -104,7 +104,24 @@ def get_user_by_email(email):
                 local_data["profile"] = merged_profile
                 return local_data
             else:
-                return at_user
+                # No local SQLite record exists (ephemeral DB / fresh deployment).
+                # Create a local cache so user_id is a valid SQLite integer,
+                # preventing Airtable Record IDs from breaking get_user_profile.
+                at_email = at_user.get("email", email)
+                at_name = at_user.get("name", "")
+                try:
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
+                    c.execute("INSERT INTO users (email, name, profile_json) VALUES (?, ?, ?)",
+                              (at_email, at_name, json.dumps(merged_profile)))
+                    local_id = c.lastrowid
+                    conn.commit()
+                    conn.close()
+                    return {"id": local_id, "email": at_email, "name": at_name, "profile": merged_profile}
+                except Exception as e:
+                    print(f"Local cache creation failed: {e}")
+                    # Fall back to Airtable user as last resort
+                    return at_user
 
     return local_data
 
@@ -210,7 +227,15 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
     # 1. Airtable (Centralized)
     if airtable_manager.is_configured():
         user = get_user_profile(user_id)
+        user_email = None
         if user and user.get("email"):
+            user_email = user["email"]
+        
+        # Fallback: session state email (covers ephemeral SQLite on Cloud)
+        if not user_email:
+            user_email = st.session_state.get("user_email", "")
+        
+        if user_email:
              if isinstance(notes_json, str):
                 try:
                     notes_dict = json.loads(notes_json)
@@ -231,7 +256,7 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
                 "Notes": notes_dict,
                 "Value": value
             }
-             at_result = airtable_manager.add_lead(user["email"], data)
+             at_result = airtable_manager.add_lead(user_email, data)
              if at_result:
                  return at_result
              else:
@@ -297,8 +322,16 @@ def add_lead(user_id, business_name, sector, location, website="", status="Pipel
 def get_leads(user_id):
     if airtable_manager.is_configured():
         user = get_user_profile(user_id)
+        email = None
         if user and user.get("email"):
-             return airtable_manager.get_leads(user["email"])
+            email = user["email"]
+        
+        # Fallback: use session state email (covers ephemeral SQLite on Cloud)
+        if not email:
+            email = st.session_state.get("user_email", "")
+        
+        if email:
+            return airtable_manager.get_leads(email)
 
     if "use_sheets" in st.session_state and st.session_state["use_sheets"]:
         return sheet_manager.get_leads()
