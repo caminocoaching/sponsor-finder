@@ -1577,6 +1577,21 @@ if current_tab == "📊 Active Campaign":
     # Load Leads from DB for THIS user
     my_leads = db.get_leads(st.session_state.user_id)
     
+    # --- TEMPORARY DEBUG (visible on Cloud) ---
+    with st.expander("🔧 Debug Info (temporary)", expanded=False):
+        _dbg_uid = st.session_state.user_id
+        _dbg_email = st.session_state.get("user_email", "(not set)")
+        _dbg_profile = db.get_user_profile(_dbg_uid)
+        _dbg_profile_email = _dbg_profile.get("email", "(none)") if _dbg_profile else "(profile is None)"
+        st.code(f"user_id: {_dbg_uid} (type: {type(_dbg_uid).__name__})")
+        st.code(f"session email: {_dbg_email}")
+        st.code(f"profile email: {_dbg_profile_email}")
+        st.code(f"airtable configured: {db.airtable_manager.is_configured()}")
+        st.code(f"leads returned: {len(my_leads) if my_leads else 0}")
+        if my_leads and len(my_leads) > 0:
+            st.code(f"first lead: {my_leads[0].get('Business Name', '?')}")
+    # --- END DEBUG ---
+    
     if not my_leads:
         st.info("No leads yet. Go to 'Search & Add' to find sponsors.")
         if st.button("➕ Find Sponsors Now"):
